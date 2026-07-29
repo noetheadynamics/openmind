@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5z' fill='%236366f1'/></svg>">
+    <title>OpenMind – Visual Systems Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+        #viewport3d { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        #testPanel {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 16px; width: 400px; max-height: 90vh;
+            overflow-y: auto; backdrop-filter: blur(12px); font-size: 13px;
+        }
+        #testPanel h2 { color: #8b5cf6; margin-bottom: 12px; font-size: 16px; }
+        .tg { margin-bottom: 10px; border-bottom: 1px solid rgba(100,100,200,0.2); padding-bottom: 8px; }
+        .tg h3 { color: #60a5fa; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; }
+        .tr { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+        .tb {
+            padding: 3px 8px; border: 1px solid rgba(100,100,200,0.4); border-radius: 6px;
+            background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 10px;
+        }
+        .tb:hover { background: rgba(60,60,120,0.8); border-color: #8b5cf6; }
+        .r { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+        .pass { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .fail { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .pending { background: rgba(234,179,8,0.2); color: #eab308; }
+        #log { margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 10px; color: #94a3b8; }
+        #log div { padding: 2px 0; border-bottom: 1px solid rgba(100,100,200,0.1); }
+        #log .ok { color: #22c55e; } #log .err { color: #ef4444; } #log .info { color: #60a5fa; }
+        #statusBar {
+            position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            display: flex; gap: 8px; padding: 8px 16px; background: rgba(10,10,30,0.9);
+            border: 1px solid rgba(100,100,200,0.3); border-radius: 8px; font-size: 12px;
+        }
+        .ctrl { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+        .ctrl button { padding: 3px 8px; border: 1px solid rgba(100,100,200,0.4); border-radius: 4px; background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 10px; }
+        .ctrl button:hover { background: rgba(60,60,120,0.8); }
+        input[type="range"] { width: 80px; }
+    </style>
+</head>
+<body>
+    <div id="viewport3d"></div>
+
+    <div id="testPanel">
+        <h2>Visual Systems Test</h2>
+
+        <div class="tg">
+            <h3>1. Particle System</h3>
+            <div class="tr"><button class="tb" onclick="testFire()">Fire</button><button class="tb" onclick="testSmoke()">Smoke</button><button class="tb" onclick="testExplosion()">Explosion</button><span id="t1" class="r pending">pending</span></div>
+            <div class="tr"><button class="tb" onclick="testRain()">Rain</button><button class="tb" onclick="testSnow()">Snow</button><button class="tb" onclick="testLeaves()">Leaves</button><span id="t2" class="r pending">pending</span></div>
+            <div class="tr"><button class="tb" onclick="testSparks()">Sparks</button><button class="tb" onclick="testBubbles()">Bubbles</button><button class="tb" onclick="testDust()">Dust</button><span id="t3" class="r pending">pending</span></div>
+            <div class="ctrl"><span style="font-size:10px;color:#94a3b8">Particles: <span id="particleCount">0</span></span></div>
+        </div>
+
+        <div class="tg">
+            <h3>2. Skybox</h3>
+            <div class="tr"><button class="tb" onclick="setTime(6)">Sunrise</button><button class="tb" onclick="setTime(12)">Noon</button><button class="tb" onclick="setTime(18)">Sunset</button><button class="tb" onclick="setTime(22)">Night</button><span id="t4" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>3. Water</h3>
+            <div class="tr"><button class="tb" onclick="testWater()">Create water</button><span id="t5" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>4. Post-Processing</h3>
+            <div class="tr"><button class="tb" onclick="testBloom()">Bloom</button><button class="tb" onclick="testFog()">Fog</button><button class="tb" onclick="testColorGrading()">Color</button><span id="t6" class="r pending">pending</span></div>
+            <div class="ctrl">
+                <span style="font-size:10px">Bloom</span><input type="range" id="bloomSlider" min="0" max="1" step="0.1" value="0.4" oninput="setBloom(this.value)">
+                <span style="font-size:10px">Fog</span><input type="range" id="fogSlider" min="0" max="1" step="0.1" value="0.3" oninput="setFog(this.value)">
+                <span style="font-size:10px">Sat</span><input type="range" id="satSlider" min="0" max="2" step="0.1" value="1" oninput="setSat(this.value)">
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>5. Sound System</h3>
+            <div class="tr"><button class="tb" onclick="testSoundFootstep()">Footstep</button><button class="tb" onclick="testSoundPlace()">Place</button><button class="tb" onclick="testSoundBreak()">Break</button><span id="t7" class="r pending">pending</span></div>
+            <div class="tr"><button class="tb" onclick="testSoundDoor()">Door</button><button class="tb" onclick="testSoundExplosion()">Explosion</button><button class="tb" onclick="testSoundCraft()">Craft</button><span id="t8" class="r pending">pending</span></div>
+            <div class="ctrl"><span style="font-size:10px">Vol</span><input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.5" oninput="setVol(this.value)"><span id="volLabel">50%</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>6. Physics Visuals</h3>
+            <div class="tr"><button class="tb" onclick="testCrack()">Crack</button><button class="tb" onclick="testGlow()">Glow</button><button class="tb" onclick="testFrost()">Frost</button><span id="t9" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>7. Performance</h3>
+            <div class="tr"><button class="tb" onclick="testPerf()">Run 10s benchmark</button><span id="t10" class="r pending">pending</span></div>
+            <div class="ctrl"><span style="font-size:10px;color:#94a3b8">FPS: <span id="fpsDisplay">0</span> | Particles: <span id="perfParticles">0</span> | Effects: <span id="perfEffects">0</span></span></div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <div id="statusBar">
+        <span>FPS: <span id="fpsBar">0</span></span>
+        <span>Particles: <span id="partBar">0</span></span>
+        <span>Time: <span id="timeBar">06:00</span></span>
+    </div>
+
+    <script src="ui_connection.js"></script>
+    <script src="world_io.js"></script>
+    <script src="stats.js"></script>
+    <script src="state_machine.js"></script>
+    <script src="interactive_objects.js"></script>
+    <script src="inventory_system.js"></script>
+    <script src="crafting_system.js"></script>
+    <script src="particle_system.js"></script>
+    <script src="physics_visuals.js"></script>
+    <script src="sound_system.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="voxel_renderer.js"></script>
+    <script src="water_renderer.js"></script>
+    <script src="skybox.js"></script>
+    <script src="post_processing.js"></script>
+    <script src="llm_client.js"></script>
+
+    <script>
+        let engine, renderer, particles, sky, water, post, sound, pv;
+        let frameCount = 0, lastFpsTime = performance.now();
+
+        function log(msg, cls) {
+            const div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function setR(id, pass) {
+            const el = document.getElementById(id);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'r ' + (pass ? 'pass' : 'fail');
+        }
+
+        async function init() {
+            log('Loading WASM...', 'info');
+            engine = new EngineConnection();
+            const ok = await engine.load();
+            if (!ok) { log('WASM failed', 'err'); return; }
+            engine.initWorld();
+            engine.setTimeOfDay(12);
+            log('WASM ready', 'ok');
+
+            renderer = new VoxelRenderer('viewport3d');
+            renderer.start(engine);
+            log('Renderer ready', 'ok');
+
+            particles = new ParticleSystem();
+            log('ParticleSystem ready (' + particles.maxParticles + ' pool)', 'ok');
+
+            sky = new OpenMindSkybox(renderer.scene);
+            log('Skybox ready', 'ok');
+
+            water = new WaterRenderer(renderer.scene, renderer.camera);
+            log('WaterRenderer ready', 'ok');
+
+            if (typeof THREE.EffectComposer !== 'undefined') {
+                post = new PostProcessing(renderer.renderer, renderer.scene, renderer.camera);
+                post.setup();
+                log('PostProcessing ready', 'ok');
+            } else {
+                log('PostProcessing: EffectComposer not loaded (optional)', 'info');
+            }
+
+            sound = new SoundSystem();
+            await sound.init();
+            log('SoundSystem ready', 'ok');
+
+            pv = new PhysicsVisuals(renderer.scene);
+            log('PhysicsVisuals ready', 'ok');
+
+            log('All systems initialized', 'ok');
+        }
+
+        // Particle tests
+        function testFire() {
+            particles.emit('fire', 0, 2, 0, { count: 30 });
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t1', particles.count > 0);
+            log('Fire particles: ' + particles.count, 'ok');
+        }
+        function testSmoke() {
+            particles.emit('smoke', 3, 2, 0, { count: 20 });
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t1', particles.count > 0);
+            log('Smoke particles: ' + particles.count, 'ok');
+        }
+        function testExplosion() {
+            particles.emitExplosion(6, 3, 0, 1.0);
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t1', particles.count > 0);
+            log('Explosion particles: ' + particles.count, 'ok');
+        }
+        function testRain() {
+            particles.emitRain(-20, 20, -20, 20, 25);
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t2', particles.count > 0);
+            log('Rain particles: ' + particles.count, 'ok');
+        }
+        function testSnow() {
+            particles.emitSnow(-20, 20, -20, 20, 25);
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t2', particles.count > 0);
+            log('Snow particles: ' + particles.count, 'ok');
+        }
+        function testLeaves() {
+            particles.emit('leaves', 5, 8, 0, { count: 15 });
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t2', particles.count > 0);
+            log('Leaf particles: ' + particles.count, 'ok');
+        }
+        function testSparks() {
+            particles.emit('sparks', 0, 3, 5, { count: 25 });
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t3', particles.count > 0);
+            log('Spark particles: ' + particles.count, 'ok');
+        }
+        function testBubbles() {
+            particles.emit('bubbles', 0, 0, 8, { count: 20 });
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t3', particles.count > 0);
+            log('Bubble particles: ' + particles.count, 'ok');
+        }
+        function testDust() {
+            particles.emit('dust', 8, 2, 0, { count: 20 });
+            document.getElementById('particleCount').textContent = particles.count;
+            setR('t3', particles.count > 0);
+            log('Dust particles: ' + particles.count, 'ok');
+        }
+
+        // Skybox
+        function setTime(h) {
+            engine.setTimeOfDay(h);
+            document.getElementById('timeBar').textContent = String(Math.floor(h)).padStart(2,'0') + ':00';
+            setR('t4', true);
+            log('Time set to ' + h + ':00', 'ok');
+        }
+
+        // Water
+        function testWater() {
+            const blocks = [];
+            for (let x = -5; x < 5; x++) for (let z = -5; z < 5; z++) {
+                blocks.push({ x, y: 0, z });
+                engine.setBlock(x, 0, z, 4);
+            }
+            water.addWaterChunk(0, 0, blocks, 16);
+            water.setType('ocean');
+            renderer.updateFromWASM();
+            renderer.rebuildMesh();
+            setR('t5', water.meshes.size > 0);
+            log('Water chunks: ' + water.meshes.size, 'ok');
+        }
+
+        // Post-processing
+        function testBloom() {
+            if (post) { post.setBloom(!post.bloomEnabled); setR('t6', true); log('Bloom: ' + post.bloomEnabled, 'ok'); }
+            else { setR('t6', false); log('PostProcessing not available', 'err'); }
+        }
+        function testFog() {
+            if (post) { post.setFog(!post.fogEnabled); setR('t6', true); log('Fog: ' + post.fogEnabled, 'ok'); }
+        }
+        function testColorGrading() {
+            if (post) { post.setColorGrading(!post.colorGradingEnabled); setR('t6', true); log('ColorGrading: ' + post.colorGradingEnabled, 'ok'); }
+        }
+        function setBloom(v) { if (post) post.setBloomIntensity(parseFloat(v)); }
+        function setFog(v) { if (post) post.setFogRange(30, 200 - parseFloat(v) * 170); }
+        function setSat(v) { if (post) post.setSaturation(parseFloat(v)); }
+
+        // Sound
+        function testSoundFootstep() { sound.playFootstep && sound.play('footstep_stone', 0, 1, 0); sound.playBlockPlace(0,1,0); setR('t7', true); log('Sound: footstep', 'ok'); }
+        function testSoundPlace() { sound.playBlockPlace(2, 1, 0); setR('t7', true); log('Sound: place', 'ok'); }
+        function testSoundBreak() { sound.playBlockBreak(4, 1, 0); setR('t7', true); log('Sound: break', 'ok'); }
+        function testSoundDoor() { sound.playDoorOpen(6, 1, 0); setR('t8', true); log('Sound: door', 'ok'); }
+        function testSoundExplosion() { sound.playExplosion(8, 3, 0); setR('t8', true); log('Sound: explosion', 'ok'); }
+        function testSoundCraft() { sound.playCraft(0, 1, 0); setR('t8', true); log('Sound: craft', 'ok'); }
+        function setVol(v) { sound.setVolume(parseFloat(v)); document.getElementById('volLabel').textContent = Math.round(v * 100) + '%'; }
+
+        // Physics visuals
+        function testCrack() { pv.addCrack(0, 2, 0, 5); setR('t9', true); log('Crack effect added', 'ok'); }
+        function testGlow() { pv.addGlow(3, 2, 0, 0xffaa00, 1.0); setR('t9', true); log('Glow effect added', 'ok'); }
+        function testFrost() { pv.addFrost(6, 2, 0); setR('t9', true); log('Frost effect added', 'ok'); }
+
+        // Performance
+        function testPerf() {
+            const start = performance.now();
+            const interval = setInterval(() => {
+                const now = performance.now();
+                const elapsed = (now - start) / 1000;
+                particles.emit('fire', Math.random() * 20 - 10, 2, Math.random() * 20 - 10, { count: 50 });
+                particles.emit('smoke', Math.random() * 20 - 10, 5, Math.random() * 20 - 10, { count: 30 });
+                particles.emit('sparks', Math.random() * 20 - 10, 3, Math.random() * 20 - 10, { count: 20 });
+                document.getElementById('perfParticles').textContent = particles.count;
+                document.getElementById('perfEffects').textContent = pv.effectCount;
+                document.getElementById('fpsDisplay').textContent = renderer.fps || 0;
+                document.getElementById('fpsBar').textContent = renderer.fps || 0;
+                document.getElementById('partBar').textContent = particles.count;
+                if (elapsed >= 10) {
+                    clearInterval(interval);
+                    const fps = renderer.fps || 0;
+                    setR('t10', fps > 20);
+                    log('Benchmark: avg FPS=' + fps + ' peak particles=' + particles.count, fps > 20 ? 'ok' : 'err');
+                }
+            }, 100);
+        }
+
+        init();
+    </script>
+</body>
+</html>

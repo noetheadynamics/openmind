@@ -1,0 +1,22 @@
+{
+  "name": "openmind",
+  "version": "1.0.0",
+  "description": "Universal Voxel-Based Sandbox Emulator with AI-Powered Agents",
+  "main": "web/index.html",
+  "scripts": {
+    "start": "python -m http.server 8080 -d web",
+    "build:wasm": "bash build/build_wasm.sh",
+    "build:native": "bash build/build_native.sh",
+    "test": "bash build/run_tests.sh"
+  },
+  "keywords": [
+    "voxel", "physics", "simulation", "ai", "llm",
+    "agent", "sandbox", "webassembly", "wasm"
+  ],
+  "author": "OpenMind",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/noetheadynamics/openmind"
+  }
+}

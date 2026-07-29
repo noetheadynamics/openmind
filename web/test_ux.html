@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5z' fill='%236366f1'/></svg>">
+    <title>OpenMind – UX Systems Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+        #testPanel {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 16px; width: 420px; max-height: 90vh;
+            overflow-y: auto; backdrop-filter: blur(12px); font-size: 13px;
+        }
+        #testPanel h2 { color: #8b5cf6; margin-bottom: 12px; font-size: 16px; }
+        .tg { margin-bottom: 10px; border-bottom: 1px solid rgba(100,100,200,0.2); padding-bottom: 8px; }
+        .tg h3 { color: #60a5fa; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; }
+        .tr { display: flex; align-items: center; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+        .tb {
+            padding: 3px 8px; border: 1px solid rgba(100,100,200,0.4); border-radius: 6px;
+            background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 10px;
+        }
+        .tb:hover { background: rgba(60,60,120,0.8); border-color: #8b5cf6; }
+        .r { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+        .pass { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .fail { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .pending { background: rgba(234,179,8,0.2); color: #eab308; }
+        #log { margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 10px; color: #94a3b8; }
+        #log div { padding: 2px 0; border-bottom: 1px solid rgba(100,100,200,0.1); }
+        #log .ok { color: #22c55e; } #log .err { color: #ef4444; } #log .info { color: #60a5fa; }
+        .box {
+            position: fixed; padding: 12px; background: rgba(10,10,30,0.9); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 8px; font-size: 11px; z-index: 999;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="testPanel">
+        <h2>UX Systems Test</h2>
+
+        <div class="tg">
+            <h3>1. UI Animations</h3>
+            <div class="tr"><button class="tb" onclick="testFadeIn()">Fade In</button><button class="tb" onclick="testSlideIn()">Slide In</button><button class="tb" onclick="testPulse()">Pulse</button><button class="tb" onclick="testShake()">Shake</button><span id="t1" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>2. Error Handler</h3>
+            <div class="tr"><button class="tb" onclick="testError()">Trigger Error</button><button class="tb" onclick="testErrorHandler()">Handle Async</button><span id="t2" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>3. Notifications</h3>
+            <div class="tr"><button class="tb" onclick="testNotifSuccess()">Success</button><button class="tb" onclick="testNotifInfo()">Info</button><button class="tb" onclick="testNotifWarn()">Warning</button><button class="tb" onclick="testNotifError()">Error</button><span id="t3" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>4. Undo/Redo</h3>
+            <div class="tr"><button class="tb" onclick="testUndoRedo()">Execute + Undo + Redo</button><span id="t4" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>5. Keyboard Shortcuts</h3>
+            <div class="tr"><button class="tb" onclick="testShortcuts()">Test All</button><span id="t5" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>6. Settings</h3>
+            <div class="tr"><button class="tb" onclick="testSettings()">Set + Get + Persist</button><span id="t6" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>7. Tutorial</h3>
+            <div class="tr"><button class="tb" onclick="testTutorial()">Start + Steps</button><span id="t7" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>8. Loading Screen</h3>
+            <div class="tr"><button class="tb" onclick="testLoading()">Show + Steps + Hide</button><span id="t8" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>9. Settings Panel UI</h3>
+            <div class="tr"><button class="tb" onclick="testSettingsUI()">Render + Bind</button><span id="t9" class="r pending">pending</span></div>
+            <div id="settingsTest" style="margin-top:6px;max-height:200px;overflow-y:auto;border:1px solid rgba(100,100,200,0.2);border-radius:6px"></div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script src="ui_animations.js"></script>
+    <script src="error_handler.js"></script>
+    <script src="loading_screen.js"></script>
+    <script src="tutorial.js"></script>
+    <script src="undo_redo.js"></script>
+    <script src="shortcuts.js"></script>
+    <script src="notifications.js"></script>
+    <script src="settings_panel.js"></script>
+
+    <div id="animBox" class="box" style="top:10px;right:10px;width:120px;height:80px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(100,100,200,0.3);border-radius:8px;font-size:12px">Animate Me</div>
+
+    <script>
+        let notifs, err, sc, ur, tut, ls, sp;
+
+        function log(msg, cls) {
+            const div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function setR(id, pass) {
+            const el = document.getElementById(id);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'r ' + (pass ? 'pass' : 'fail');
+        }
+
+        function init() {
+            UIAnimations.init();
+            notifs = new Notifications();
+            err = new ErrorHandler();
+            sc = new Shortcuts();
+            ur = new UndoRedo();
+            tut = new Tutorial();
+            ls = new LoadingScreen();
+            sp = new SettingsPanel();
+            log('All UX modules initialized', 'ok');
+        }
+
+        function testFadeIn() {
+            const el = document.getElementById('animBox');
+            el.style.opacity = '0';
+            UIAnimations.fadeIn(el, 200).then(() => {
+                setR('t1', el.style.opacity === '1');
+                log('fadeIn: opacity=' + el.style.opacity, 'ok');
+            });
+        }
+
+        function testSlideIn() {
+            const el = document.getElementById('animBox');
+            el.style.opacity = '0';
+            UIAnimations.slideIn(el, 'right', 200).then(() => {
+                setR('t1', true);
+                log('slideIn: done', 'ok');
+            });
+        }
+
+        function testPulse() {
+            UIAnimations.pulse(document.getElementById('animBox'), '#8b5cf6', 300);
+            setR('t1', true);
+            log('pulse: triggered', 'ok');
+        }
+
+        function testShake() {
+            UIAnimations.shake(document.getElementById('animBox'), 5, 300);
+            setR('t1', true);
+            log('shake: triggered', 'ok');
+        }
+
+        function testError() {
+            const entry = err.handle(new Error('Test error'), 'GENERIC');
+            setR('t2', entry && entry.id);
+            log('error: id=' + entry.id + ' title=' + entry.title, 'ok');
+        }
+
+        function testErrorHandler() {
+            const result = err.handleAsync(Promise.reject(new Error('async test')), 'GENERIC');
+            result.then(r => {
+                setR('t2', !!r.error);
+                log('errorHandler: async caught', 'ok');
+            });
+        }
+
+        function testNotifSuccess() {
+            notifs.success('World saved successfully');
+            setR('t3', true);
+            log('notif: success toast', 'ok');
+        }
+
+        function testNotifInfo() {
+            notifs.info('Material generated: Obsidian Glass');
+            setR('t3', true);
+            log('notif: info toast', 'ok');
+        }
+
+        function testNotifWarn() {
+            notifs.warning('Low memory - reducing quality');
+            setR('t3', true);
+            log('notif: warning toast', 'ok');
+        }
+
+        function testNotifError() {
+            notifs.error('Failed to connect to LLM API');
+            setR('t3', true);
+            log('notif: error toast', 'ok');
+        }
+
+        function testUndoRedo() {
+            let val = 0;
+            ur.execute({ do: () => { val = 1; }, undo: () => { val = 0; }, description: 'Set to 1' });
+            ur.execute({ do: () => { val = 2; }, undo: () => { val = 1; }, description: 'Set to 2' });
+            const before = val;
+            ur.undo();
+            const afterUndo = val;
+            ur.redo();
+            const afterRedo = val;
+            const pass = before === 2 && afterUndo === 1 && afterRedo === 2;
+            setR('t4', pass);
+            log('undoRedo: ' + before + ' → undo → ' + afterUndo + ' → redo → ' + afterRedo, pass ? 'ok' : 'err');
+        }
+
+        function testShortcuts() {
+            let triggered = false;
+            sc.register('undo', () => { triggered = true; });
+            sc.init();
+            const evt = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true });
+            document.dispatchEvent(evt);
+            setR('t5', triggered);
+            log('shortcuts: ctrl+z triggered=' + triggered, 'ok');
+        }
+
+        function testSettings() {
+            sp.set('display.theme', 'light');
+            const val = sp.get('display.theme');
+            sp.set('audio.master', 0.75);
+            const val2 = sp.get('audio.master');
+            const pass = val === 'light' && val2 === 0.75;
+            setR('t6', pass);
+            log('settings: theme=' + val + ' master=' + val2, pass ? 'ok' : 'err');
+        }
+
+        function testTutorial() {
+            tut.reset();
+            const shouldShow = tut.shouldShow();
+            tut.start();
+            const active = tut.active;
+            tut.skip();
+            const skipped = !tut.active;
+            setR('t7', shouldShow && active && skipped);
+            log('tutorial: show=' + shouldShow + ' active=' + active + ' skipped=' + skipped, 'ok');
+        }
+
+        async function testLoading() {
+            ls.show();
+            const hasOverlay = !!document.getElementById('loadingScreen');
+            await ls.runSteps([
+                { name: 'Step 1', fn: () => new Promise(r => setTimeout(r, 100)) },
+                { name: 'Step 2', fn: () => new Promise(r => setTimeout(r, 100)) }
+            ]);
+            await ls.hide();
+            const hidden = !document.getElementById('loadingScreen');
+            setR('t8', hasOverlay && hidden);
+            log('loading: showed=' + hasOverlay + ' hidden=' + hidden, 'ok');
+        }
+
+        function testSettingsUI() {
+            const panel = document.getElementById('settingsTest');
+            sp.renderUI(panel);
+            sp.bindUI(panel);
+            const toggles = panel.querySelectorAll('.settings-toggle').length;
+            const sliders = panel.querySelectorAll('.settings-slider').length;
+            setR('t9', toggles > 0 && sliders > 0);
+            log('settingsUI: toggles=' + toggles + ' sliders=' + sliders, 'ok');
+        }
+
+        init();
+    </script>
+</body>
+</html>

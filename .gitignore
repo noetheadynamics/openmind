@@ -1,0 +1,35 @@
+# Build outputs
+*.exe
+*.obj
+*.o
+*.wasm
+*.js.map
+
+# WASM build output
+build/wasm/
+
+# Emscripten temp
+*.mem
+*.data
+
+# Node
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
