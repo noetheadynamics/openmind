@@ -42,6 +42,7 @@ class TouchControls {
         this._playerPos = { x: 0, y: 10, z: 0 };
         this._playerYaw = 0;
         this._playerPitch = 0;
+        this._lastFrameTime = 0;
         this._animFrame = null;
         this._crosshairEl = null;
     }
@@ -585,15 +586,20 @@ class TouchControls {
     }
 
     _startLoop() {
-        const loop = () => { this._update(); this._animFrame = requestAnimationFrame(loop); };
+        this._lastFrameTime = performance.now();
+        const loop = (time) => {
+            const dt = Math.min((time - this._lastFrameTime) / 1000, 0.1);
+            this._lastFrameTime = time;
+            this._update(dt);
+            this._animFrame = requestAnimationFrame(loop);
+        };
         this._animFrame = requestAnimationFrame(loop);
     }
 
     _stopLoop() { if (this._animFrame) cancelAnimationFrame(this._animFrame); }
 
-    _update() {
+    _update(dt) {
         if (!this.enabled) return;
-        const dt = 0.016;
         const mx = this.joystick.x * this.moveSpeed * dt;
         const mz = this.joystick.y * this.moveSpeed * dt;
         const sin = Math.sin(this._playerYaw);

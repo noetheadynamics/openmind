@@ -1,4 +1,4 @@
-const DAY_LENGTH = (typeof OMUtils !== 'undefined') ? OMUtils.DAY_LENGTH : 36000;
+const DAY_LENGTH = window.DAY_LENGTH || 36000;
 
 class LiveStats {
     constructor() {

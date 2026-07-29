@@ -172,8 +172,7 @@
         }
 
         createLights() {
-            this.sunLight = null;
-            this.ambientLight = null;
+            // TODO: Implement directional + ambient lights for skybox
         }
 
         update(dt, timeOfDay, weather) {

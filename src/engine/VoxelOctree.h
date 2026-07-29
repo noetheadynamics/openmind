@@ -92,6 +92,9 @@ public:
     int getMemoryUsage() const;
     int getBlockCount() const;
 
+    using VisitCallback = std::function<bool(const VoxelData&, int, int, int, int)>;
+    void traverse(VisitCallback callback) const;
+
     static VoxelOctree createTestWorld();
 
 private:

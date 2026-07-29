@@ -17,6 +17,11 @@ class NetworkManager {
         this.signalingUrl = options?.signalingUrl || 'wss://signaling.openmind.dev';
         this.localSignaling = null;
 
+        this.stunServers = options?.stunServers || [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ];
+
         this.onPeerConnected = null;
         this.onPeerDisconnected = null;
         this.onWorldSync = null;
@@ -37,6 +42,8 @@ class NetworkManager {
             messagesReceived: 0,
             peersConnected: 0
         };
+
+        this.pingMs = 3000;
     }
 
     generatePlayerId() {
@@ -208,10 +215,7 @@ class NetworkManager {
 
     createPeerConnection(peerId) {
         const config = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
+            iceServers: this.stunServers
         };
 
         const pc = new RTCPeerConnection(config);
@@ -414,7 +418,7 @@ class NetworkManager {
     }
 
     startPing() {
-        this.pingInterval = setInterval(() => this.sendPing(), 3000);
+        this.pingInterval = setInterval(() => this.sendPing(), this.pingMs);
     }
 
     stopPing() {

@@ -246,20 +246,23 @@ const char* saveWorld() {
     static std::string result;
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!g_world) { result = "{}"; return result.c_str(); }
+
+    int count = g_world->getBlockCount();
+    if (count == 0) {
+        result = "{\"blocks\":[],\"agentCount\":" + intToStr(g_engine ? (int)g_engine->getAgents().size() : 0) + "}";
+        return result.c_str();
+    }
+
+    result.reserve(count * 80 + 32);
     result = "{\"blocks\":[";
     bool first = true;
-    for (int x = 0; x < 256; x++) {
-        for (int y = 0; y < 256; y++) {
-            for (int z = 0; z < 256; z++) {
-                VoxelData data;
-                if (!g_world->getBlock(x, y, z, data) || !data.occupied) continue;
-                if (data.type == BlockType::AIR) continue;
-                if (!first) result += ",";
-                first = false;
-                result += "{\"x\":" + intToStr(x) + ",\"y\":" + intToStr(y) + ",\"z\":" + intToStr(z) + ",\"type\":" + intToStr(static_cast<int>(data.type)) + "}";
-            }
-        }
-    }
+    g_world->traverse([&](const VoxelData& data, int x, int y, int z, int) -> bool {
+        if (!data.occupied || data.type == BlockType::AIR) return true;
+        if (!first) result += ",";
+        first = false;
+        result += "{\"x\":" + intToStr(x) + ",\"y\":" + intToStr(y) + ",\"z\":" + intToStr(z) + ",\"type\":" + intToStr(static_cast<int>(data.type)) + "}";
+        return true;
+    });
     result += "],\"agentCount\":" + intToStr(g_engine ? (int)g_engine->getAgents().size() : 0) + "}";
     return result.c_str();
 }
@@ -454,6 +457,14 @@ const char* exportCSV(const char* filenamePtr) {
     std::string filename(filenamePtr ? filenamePtr : "");
     if (!g_world || filename.empty()) { result = "error: no world"; return result.c_str(); }
 
+    std::lock_guard<std::mutex> lock(g_mutex);
+
+    int count = g_world->getBlockCount();
+    if (count == 0) {
+        result = "{\"filename\":\"" + filename + "\",\"rows\":0,\"csvLength\":0}";
+        return result.c_str();
+    }
+
     std::string header = "x,y,z,blockType,mass,density,hardness,elasticity,tensileStrength,"
         "thermalConductivity,specificHeat,meltingPoint,boilingPoint,"
         "composition,flammability,combustionPoint,corrosionRate,"
@@ -461,46 +472,42 @@ const char* exportCSV(const char* filenamePtr) {
         "opacity,buoyancy,friction,maxHealth,currentHealth\n";
 
     std::string csv = header;
-    int count = 0;
-    for (int x = 0; x < 256; x++) {
-        for (int y = 0; y < 256; y++) {
-            for (int z = 0; z < 256; z++) {
-                VoxelData data;
-                if (!g_world->getBlock(x, y, z, data) || !data.occupied) continue;
-                if (data.type == BlockType::AIR) continue;
+    csv.reserve(count * 400 + header.size());
+    int rowCount = 0;
+    g_world->traverse([&](const VoxelData& data, int x, int y, int z, int) -> bool {
+        if (!data.occupied || data.type == BlockType::AIR) return true;
 
-                std::string row = intToStr(x) + "," + intToStr(y) + "," + intToStr(z) + ","
-                    + intToStr(static_cast<int>(data.type)) + ","
-                    + floatToStr(data.props.general.mass) + ","
-                    + floatToStr(data.props.general.density) + ","
-                    + floatToStr(data.props.general.hardness) + ","
-                    + floatToStr(data.props.general.elasticity) + ","
-                    + floatToStr(data.props.mechanical.tensileStrength) + ","
-                    + floatToStr(data.props.thermal.thermalConductivity) + ","
-                    + floatToStr(data.props.thermal.specificHeat) + ","
-                    + floatToStr(data.props.thermal.meltingPoint) + ","
-                    + floatToStr(data.props.thermal.boilingPoint) + ","
-                    + data.props.chemical.composition + ","
-                    + floatToStr(data.props.chemical.flammability) + ","
-                    + floatToStr(data.props.chemical.combustionPoint) + ","
-                    + floatToStr(data.props.chemical.corrosionRate) + ","
-                    + floatToStr(data.props.electrical.conductivity) + ","
-                    + floatToStr(data.props.electrical.resistivity) + ","
-                    + data.props.visual.baseColor + ","
-                    + floatToStr(data.props.visual.roughness) + ","
-                    + floatToStr(data.props.visual.metallicness) + ","
-                    + floatToStr(data.props.visual.opacity) + ","
-                    + floatToStr(data.props.environmental.buoyancy) + ","
-                    + floatToStr(data.props.environmental.friction) + ","
-                    + floatToStr(data.props.health.maxHealth) + ","
-                    + floatToStr(data.props.health.currentHealth) + "\n";
-                csv += row;
-                count++;
-            }
-        }
-    }
+        std::string row = intToStr(x) + "," + intToStr(y) + "," + intToStr(z) + ","
+            + intToStr(static_cast<int>(data.type)) + ","
+            + floatToStr(data.props.general.mass) + ","
+            + floatToStr(data.props.general.density) + ","
+            + floatToStr(data.props.general.hardness) + ","
+            + floatToStr(data.props.general.elasticity) + ","
+            + floatToStr(data.props.mechanical.tensileStrength) + ","
+            + floatToStr(data.props.thermal.thermalConductivity) + ","
+            + floatToStr(data.props.thermal.specificHeat) + ","
+            + floatToStr(data.props.thermal.meltingPoint) + ","
+            + floatToStr(data.props.thermal.boilingPoint) + ","
+            + data.props.chemical.composition + ","
+            + floatToStr(data.props.chemical.flammability) + ","
+            + floatToStr(data.props.chemical.combustionPoint) + ","
+            + floatToStr(data.props.chemical.corrosionRate) + ","
+            + floatToStr(data.props.electrical.conductivity) + ","
+            + floatToStr(data.props.electrical.resistivity) + ","
+            + data.props.visual.baseColor + ","
+            + floatToStr(data.props.visual.roughness) + ","
+            + floatToStr(data.props.visual.metallicness) + ","
+            + floatToStr(data.props.visual.opacity) + ","
+            + floatToStr(data.props.environmental.buoyancy) + ","
+            + floatToStr(data.props.environmental.friction) + ","
+            + floatToStr(data.props.health.maxHealth) + ","
+            + floatToStr(data.props.health.currentHealth) + "\n";
+        csv += row;
+        rowCount++;
+        return true;
+    });
 
-    result = "{\"filename\":\"" + filename + "\",\"rows\":" + intToStr(count) + ",\"csvLength\":" + intToStr((int)csv.size()) + "}";
+    result = "{\"filename\":\"" + filename + "\",\"rows\":" + intToStr(rowCount) + ",\"csvLength\":" + intToStr((int)csv.size()) + "}";
     g_lastExportCSV = csv;
     return result.c_str();
 }
@@ -511,39 +518,44 @@ const char* exportGLTF(const char* filenamePtr) {
     std::string filename(filenamePtr ? filenamePtr : "");
     if (!g_world || filename.empty()) { result = "error: no world"; return result.c_str(); }
 
+    std::lock_guard<std::mutex> lock(g_mutex);
+
+    int count = g_world->getBlockCount();
+    if (count == 0) {
+        result = "{\"filename\":\"" + filename + "\",\"vertices\":0,\"gltfLength\":0}";
+        return result.c_str();
+    }
+
     struct Vert { float x, y, z; };
     std::vector<Vert> vertices;
     std::vector<uint32_t> indices;
+    vertices.reserve(count * 8);
+    indices.reserve(count * 12);
 
-    for (int x = 0; x < 256; x++) {
-        for (int y = 0; y < 256; y++) {
-            for (int z = 0; z < 256; z++) {
-                VoxelData data;
-                if (!g_world->getBlock(x, y, z, data) || !data.occupied) continue;
-                if (data.type == BlockType::AIR) continue;
+    g_world->traverse([&](const VoxelData& data, int x, int y, int z, int) -> bool {
+        if (!data.occupied || data.type == BlockType::AIR) return true;
 
-                uint32_t base = static_cast<uint32_t>(vertices.size());
-                float bx = static_cast<float>(x);
-                float by = static_cast<float>(y);
-                float bz = static_cast<float>(z);
+        uint32_t base = static_cast<uint32_t>(vertices.size());
+        float bx = static_cast<float>(x);
+        float by = static_cast<float>(y);
+        float bz = static_cast<float>(z);
 
-                vertices.push_back({bx, by, bz});
-                vertices.push_back({bx+1, by, bz});
-                vertices.push_back({bx+1, by+1, bz});
-                vertices.push_back({bx, by+1, bz});
-                vertices.push_back({bx, by, bz+1});
-                vertices.push_back({bx+1, by, bz+1});
-                vertices.push_back({bx+1, by+1, bz+1});
-                vertices.push_back({bx, by+1, bz+1});
+        vertices.push_back({bx, by, bz});
+        vertices.push_back({bx+1, by, bz});
+        vertices.push_back({bx+1, by+1, bz});
+        vertices.push_back({bx, by+1, bz});
+        vertices.push_back({bx, by, bz+1});
+        vertices.push_back({bx+1, by, bz+1});
+        vertices.push_back({bx+1, by+1, bz+1});
+        vertices.push_back({bx, by+1, bz+1});
 
-                uint32_t faces[12] = {
-                    base,base+1,base+2, base,base+2,base+3,
-                    base+4,base+6,base+5, base+4,base+7,base+6
-                };
-                for (int f = 0; f < 12; f++) indices.push_back(faces[f]);
-            }
-        }
-    }
+        uint32_t faces[12] = {
+            base,base+1,base+2, base,base+2,base+3,
+            base+4,base+6,base+5, base+4,base+7,base+6
+        };
+        for (int f = 0; f < 12; f++) indices.push_back(faces[f]);
+        return true;
+    });
 
     std::string gltf = "{\n";
     gltf += "  \"asset\": {\"version\": \"2.0\", \"generator\": \"OpenMind\"},\n";

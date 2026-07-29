@@ -15,7 +15,7 @@
     <div class="bg-grid"></div>
 
     <!-- 3D VIEWPORT -->
-    <div id="viewport3d" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;"></div>
+    <div id="viewport3d" class="viewport-3d"></div>
 
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner"></div>
@@ -46,8 +46,8 @@
             <button class="topbar-btn" data-panel="building" title="Building Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20"/><path d="M5 20V8l7-5 7 5v12"/><path d="M9 20v-4h6v4"/><path d="M9 12h.01M15 12h.01M9 16h.01M15 16h.01"/></svg><span>Build</span></button>
         </div>
         <div class="top-bar-right">
-            <button class="topbar-btn-small" id="tutorialBtn" title="Tutorial" aria-label="Tutorial" style="padding:4px 8px;border:1px solid var(--glass-border);border-radius:6px;background:var(--glass-bg);color:var(--text);cursor:pointer;font-size:11px">?</button>
-            <button class="topbar-btn-small" id="settingsBtn" title="Settings" aria-label="Settings" style="padding:4px 8px;border:1px solid var(--glass-border);border-radius:6px;background:var(--glass-bg);color:var(--text);cursor:pointer;font-size:11px">⚙</button>
+            <button class="topbar-btn-small topbar-action-btn" id="tutorialBtn" title="Tutorial" aria-label="Tutorial">?</button>
+            <button class="topbar-btn-small topbar-action-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
             <div class="status-pill" id="connectionStatus"><span class="status-dot"></span><span class="status-text">Offline</span></div>
             <div class="topbar-btn-group">
                         <button class="topbar-btn-small" id="darkModeToggle" title="Toggle Theme" aria-label="Toggle dark/light theme">◐</button>
@@ -141,37 +141,37 @@
                     <label class="toggle-card" role="switch"><input type="checkbox" id="overlayEcosystem"><div class="toggle-preview eco-preview"></div><span>Ecosystem Graph</span></label>
                     <label class="toggle-card" role="switch"><input type="checkbox" id="overlayDensity"><div class="toggle-preview density-preview"></div><span>Density Map</span></label>
                 </div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase">Visual Effects</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Particles</span><button class="toggle-btn active" id="toggleParticles">ON</button></div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Skybox</span><button class="toggle-btn active" id="toggleSkybox">ON</button></div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Water</span><button class="toggle-btn active" id="toggleWater">ON</button></div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Bloom</span><button class="toggle-btn active" id="toggleBloom">ON</button></div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Fog</span><button class="toggle-btn active" id="toggleFog">ON</button></div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Vignette</span><button class="toggle-btn" id="toggleVignette">OFF</button></div>
+                <div class="section-divider">
+                    <div class="section-label">Visual Effects</div>
+                    <div class="toggle-grid">
+                        <div class="toggle-row-item"><span>Particles</span><button class="toggle-btn active" id="toggleParticles">ON</button></div>
+                        <div class="toggle-row-item"><span>Skybox</span><button class="toggle-btn active" id="toggleSkybox">ON</button></div>
+                        <div class="toggle-row-item"><span>Water</span><button class="toggle-btn active" id="toggleWater">ON</button></div>
+                        <div class="toggle-row-item"><span>Bloom</span><button class="toggle-btn active" id="toggleBloom">ON</button></div>
+                        <div class="toggle-row-item"><span>Fog</span><button class="toggle-btn active" id="toggleFog">ON</button></div>
+                        <div class="toggle-row-item"><span>Vignette</span><button class="toggle-btn" id="toggleVignette">OFF</button></div>
                     </div>
                 </div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase">Post-Processing</div>
-                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Bloom Intensity</div>
-                    <input type="range" id="bloomIntensity" min="0" max="1" step="0.1" value="0.4" style="width:100%">
-                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Fog Density</div>
-                    <input type="range" id="fogDensity" min="0" max="1" step="0.1" value="0.3" style="width:100%">
-                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Saturation</div>
-                    <input type="range" id="saturation" min="0" max="2" step="0.1" value="1" style="width:100%">
-                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Contrast</div>
-                    <input type="range" id="contrast" min="0.5" max="2" step="0.1" value="1" style="width:100%">
-                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Temperature</div>
-                    <input type="range" id="temperature" min="-1" max="1" step="0.1" value="0" style="width:100%">
+                <div class="section-divider">
+                    <div class="section-label">Post-Processing</div>
+                    <div class="range-label">Bloom Intensity</div>
+                    <input type="range" id="bloomIntensity" min="0" max="1" step="0.1" value="0.4" class="full-width">
+                    <div class="range-label">Fog Density</div>
+                    <input type="range" id="fogDensity" min="0" max="1" step="0.1" value="0.3" class="full-width">
+                    <div class="range-label">Saturation</div>
+                    <input type="range" id="saturation" min="0" max="2" step="0.1" value="1" class="full-width">
+                    <div class="range-label">Contrast</div>
+                    <input type="range" id="contrast" min="0.5" max="2" step="0.1" value="1" class="full-width">
+                    <div class="range-label">Temperature</div>
+                    <input type="range" id="temperature" min="-1" max="1" step="0.1" value="0" class="full-width">
                 </div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase">Sound</div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Sound</span><button class="toggle-btn active" id="toggleSound">ON</button></div>
-                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Volume <span id="soundVolumeLabel">50%</span></div>
-                    <input type="range" id="soundVolume" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+                <div class="section-divider">
+                    <div class="section-label">Sound</div>
+                    <div class="toggle-row-item"><span>Sound</span><button class="toggle-btn active" id="toggleSound">ON</button></div>
+                    <div class="range-label">Volume <span id="soundVolumeLabel">50%</span></div>
+                    <input type="range" id="soundVolume" min="0" max="1" step="0.05" value="0.5" class="full-width">
                 </div>
-                <div class="overlay-legend" id="overlayLegend" style="display:none;">
+                <div class="overlay-legend hidden" id="overlayLegend">
                     <div class="legend-bar" id="legendBar"></div>
                     <div class="legend-labels"><span id="legendMin">0</span><span id="legendMax">100</span></div>
                 </div>
@@ -188,7 +188,7 @@
                 <div class="agent-list" id="agentList">
                     <div class="agent-empty">No agents in world</div>
                 </div>
-                <div class="agent-inspector" id="agentInspector" style="display:none;">
+                <div class="agent-inspector hidden" id="agentInspector">
                     <div class="agent-inspector-header">
                         <div class="agent-avatar" id="agentAvatar">?</div>
                         <div class="agent-info">
@@ -242,7 +242,7 @@
                     <button class="env-card" data-preset="space"><div class="env-icon">🚀</div><span>Space</span></button>
                     <button class="env-card" data-preset="custom"><div class="env-icon">⚙️</div><span>Custom</span></button>
                 </div>
-                <div class="env-sliders" id="envCustomSliders" style="display:none;">
+                <div class="env-sliders hidden" id="envCustomSliders">
                     <div class="env-slider-row"><label>Gravity (m/s²)</label><input type="range" id="envGravity" min="0" max="20" value="9.81" step="0.01"><span id="envGravityVal">9.81</span></div>
                     <div class="env-slider-row"><label>Air Density (kg/m³)</label><input type="range" id="envAirDensity" min="0" max="5" value="1.225" step="0.001"><span id="envAirDensityVal">1.225</span></div>
                     <div class="env-slider-row"><label>Temperature (K)</label><input type="range" id="envTemp" min="0" max="600" value="293.15" step="0.1"><span id="envTempVal">293.15</span></div>
@@ -272,11 +272,11 @@
                         Generate Material
                     </button>
                 </div>
-                <div class="forge-loading" id="forgeLoading" style="display:none;">
+                <div class="forge-loading hidden" id="forgeLoading">
                     <div class="loading-spinner small"></div>
                     <span>Generating material...</span>
                 </div>
-                <div class="forge-result" id="forgeResult" style="display:none;">
+                <div class="forge-result hidden" id="forgeResult">
                     <div class="forge-preview">
                         <div class="material-swatch" id="materialSwatch"></div>
                         <div class="material-props" id="materialProps"></div>
@@ -335,7 +335,7 @@
                         <button class="export-btn" data-format="omm">.OMM (Materials)</button>
                     </div>
                 </div>
-                <div class="export-progress" id="exportProgress" style="display:none;">
+                <div class="export-progress hidden" id="exportProgress">
                     <div class="export-progress-bar"><div class="export-progress-fill" id="exportProgressFill"></div></div>
                     <span class="export-progress-text" id="exportProgressText">Exporting...</span>
                 </div>
@@ -383,11 +383,11 @@
                 <div class="brain-settings" id="brainCloudSettings">
                     <div class="brain-select-row"><label>Provider</label><select id="llmProvider"><option value="groq">Groq (Fast)</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option><option value="custom">Custom (OpenAI-compatible)</option></select></div>
                     <div class="brain-select-row" id="cloudModelRow"><label>Model</label><select id="llmModel"><option value="llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option><option value="llama-3.1-8b-instant">Llama 3.1 8B (Groq)</option><option value="mixtral-8x7b-32768">Mixtral 8x7B (Groq)</option></select></div>
-                    <div class="brain-input-row" id="cloudCustomModelRow" style="display:none;"><label>Model Name</label><input type="text" id="cloudCustomModel" placeholder="e.g. deepseek-chat, my-finetuned-model"></div>
-                    <div class="brain-input-row" id="cloudEndpointRow" style="display:none;"><label>Endpoint</label><input type="text" id="cloudEndpoint" placeholder="https://api.example.com/v1/chat/completions"></div>
+                    <div class="brain-input-row hidden" id="cloudCustomModelRow"><label>Model Name</label><input type="text" id="cloudCustomModel" placeholder="e.g. deepseek-chat, my-finetuned-model"></div>
+                    <div class="brain-input-row hidden" id="cloudEndpointRow"><label>Endpoint</label><input type="text" id="cloudEndpoint" placeholder="https://api.example.com/v1/chat/completions"></div>
                     <div class="brain-input-row"><label>API Key</label><input type="password" id="llmApiKey" placeholder="sk-..."></div>
                 </div>
-                <div class="brain-settings" id="brainLocalSettings" style="display:none;">
+                <div class="brain-settings hidden" id="brainLocalSettings">
                     <div class="brain-select-row"><label>Local Provider</label><select id="localProvider"><option value="ollama">Ollama</option><option value="lmstudio">LM Studio</option></select></div>
                     <div class="brain-select-row"><label>Model</label><select id="localModel"><option value="llama3">Llama 3</option><option value="mistral">Mistral</option><option value="codellama">Code Llama</option></select></div>
                     <div class="brain-input-row"><label>Endpoint</label><input type="text" id="localEndpoint" value="http://localhost:11434"></div>
@@ -407,8 +407,8 @@
                 <button class="panel-collapse-btn" data-target="panel-interactive">−</button>
             </div>
             <div class="panel-body">
-                <div class="int-create-row" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
-                    <select id="intCreateType" style="flex:1;min-width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px">
+                <div class="flex-row-wrap">
+                    <select id="intCreateType" class="form-input">
                         <option value="DOOR">Door</option><option value="BUTTON">Button</option>
                         <option value="LEVER">Lever</option><option value="SWITCH">Switch</option>
                         <option value="CHEST">Chest</option><option value="LAMP">Lamp</option>
@@ -418,16 +418,16 @@
                         <option value="SENSOR">Sensor</option><option value="TIMER">Timer</option>
                         <option value="COMPUTER">Computer</option>
                     </select>
-                    <input type="number" id="intCreateX" value="0" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px" placeholder="X">
-                    <input type="number" id="intCreateY" value="2" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px" placeholder="Y">
-                    <input type="number" id="intCreateZ" value="0" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px" placeholder="Z">
-                    <button class="action-btn" id="intCreateBtn" style="padding:4px 10px">Create</button>
+                    <input type="number" id="intCreateX" value="0" class="form-input-sm" placeholder="X">
+                    <input type="number" id="intCreateY" value="2" class="form-input-sm" placeholder="Y">
+                    <input type="number" id="intCreateZ" value="0" class="form-input-sm" placeholder="Z">
+                    <button class="action-btn btn-sm" id="intCreateBtn">Create</button>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span style="font-size:11px;color:var(--text-dim)">Objects in world</span>
+                <div class="flex-between">
+                    <span class="form-label">Objects in world</span>
                     <button class="icon-btn" id="intListRefresh" title="Refresh" aria-label="Refresh interactive objects list">↻</button>
                 </div>
-                <div id="intObjectList" style="max-height:250px;overflow-y:auto"></div>
+                <div id="intObjectList" class="scrollable-list"></div>
             </div>
         </section>
 
@@ -438,9 +438,9 @@
                 <button class="panel-collapse-btn" data-target="panel-inventory">−</button>
             </div>
             <div class="panel-body">
-                <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Player Inventory (36 slots) — Click to select</div>
-                <div id="invGrid" style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px"></div>
-                <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Drag items between slots. Use keys 1-9 for hotbar.</div>
+                <div class="form-label-mb">Player Inventory (36 slots) — Click to select</div>
+                <div id="invGrid" class="inv-grid"></div>
+                <div class="hint-text">Drag items between slots. Use keys 1-9 for hotbar.</div>
             </div>
         </section>
 
@@ -451,15 +451,15 @@
                 <button class="panel-collapse-btn" data-target="panel-crafting">−</button>
             </div>
             <div class="panel-body">
-                <div style="display:flex;gap:4px;margin-bottom:8px">
-                    <input type="text" id="craftAiPrompt" placeholder="Describe material to generate..." style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px">
-                    <button class="action-btn" id="craftAiBtn" style="padding:4px 8px;font-size:10px">AI Generate</button>
+                <div class="flex-row">
+                    <input type="text" id="craftAiPrompt" placeholder="Describe material to generate..." class="craft-input">
+                    <button class="action-btn craft-btn-sm" id="craftAiBtn">AI Generate</button>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span style="font-size:11px;color:var(--text-dim)">Recipes</span>
+                <div class="flex-between">
+                    <span class="form-label">Recipes</span>
                     <button class="icon-btn" id="craftRefreshBtn" title="Refresh" aria-label="Refresh crafting recipes">↻</button>
                 </div>
-                <div id="craftRecipeList" style="max-height:300px;overflow-y:auto"></div>
+                <div id="craftRecipeList" class="scrollable-list-lg"></div>
             </div>
         </section>
 
@@ -469,71 +469,71 @@
                 <h2>Building Tools</h2>
                 <button class="panel-collapse-btn" data-target="panel-building">−</button>
             </div>
-            <div class="panel-body" style="max-height:70vh;overflow-y:auto">
-                <div style="margin-bottom:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Selection</div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap">
-                        <button class="action-btn" id="selBoxBtn" style="padding:4px 8px;font-size:10px">Box</button>
-                        <button class="action-btn" id="selBrushBtn" style="padding:4px 8px;font-size:10px">Brush</button>
-                        <button class="action-btn" id="selPaintBtn" style="padding:4px 8px;font-size:10px">Paint</button>
-                        <button class="action-btn" id="selClearBtn" style="padding:4px 8px;font-size:10px">Clear</button>
+            <div class="panel-body building-scroll">
+                <div class="mb-8">
+                    <div class="panel-section-header">Selection</div>
+                    <div class="flex-row-wrap">
+                        <button class="action-btn btn-xs" id="selBoxBtn">Box</button>
+                        <button class="action-btn btn-xs" id="selBrushBtn">Brush</button>
+                        <button class="action-btn btn-xs" id="selPaintBtn">Paint</button>
+                        <button class="action-btn btn-xs" id="selClearBtn">Clear</button>
                     </div>
                 </div>
-                <div style="margin-bottom:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Copy/Paste</div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap">
-                        <button class="action-btn" id="copyBtn" style="padding:4px 8px;font-size:10px">Copy</button>
-                        <button class="action-btn" id="pasteBtn" style="padding:4px 8px;font-size:10px">Paste</button>
-                        <button class="action-btn" id="rotateBtn" style="padding:4px 8px;font-size:10px">Rotate</button>
-                        <button class="action-btn" id="flipXBtn" style="padding:4px 8px;font-size:10px">FlipX</button>
-                        <button class="action-btn" id="flipYBtn" style="padding:4px 8px;font-size:10px">FlipY</button>
-                        <button class="action-btn" id="flipZBtn" style="padding:4px 8px;font-size:10px">FlipZ</button>
+                <div class="mb-8">
+                    <div class="panel-section-header">Copy/Paste</div>
+                    <div class="flex-row-wrap">
+                        <button class="action-btn btn-xs" id="copyBtn">Copy</button>
+                        <button class="action-btn btn-xs" id="pasteBtn">Paste</button>
+                        <button class="action-btn btn-xs" id="rotateBtn">Rotate</button>
+                        <button class="action-btn btn-xs" id="flipXBtn">FlipX</button>
+                        <button class="action-btn btn-xs" id="flipYBtn">FlipY</button>
+                        <button class="action-btn btn-xs" id="flipZBtn">FlipZ</button>
                     </div>
                 </div>
-                <div style="margin-bottom:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Symmetry</div>
-                    <div style="display:flex;gap:4px">
-                        <button class="action-btn" id="symXBtn" style="padding:4px 8px;font-size:10px">X</button>
-                        <button class="action-btn" id="symYBtn" style="padding:4px 8px;font-size:10px">Y</button>
-                        <button class="action-btn" id="symZBtn" style="padding:4px 8px;font-size:10px">Z</button>
+                <div class="mb-8">
+                    <div class="panel-section-header">Symmetry</div>
+                    <div class="flex-row">
+                        <button class="action-btn btn-xs" id="symXBtn">X</button>
+                        <button class="action-btn btn-xs" id="symYBtn">Y</button>
+                        <button class="action-btn btn-xs" id="symZBtn">Z</button>
                     </div>
                 </div>
-                <div style="margin-bottom:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Fill & Patterns</div>
-                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-                        <select id="fillType" style="padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px"><option value="1">Stone</option><option value="2">Dirt</option><option value="3">Grass</option><option value="7">Wood</option><option value="9">Iron</option><option value="13">Diamond</option></select>
-                        <select id="fillPattern" style="padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px"><option value="solid">Solid</option><option value="checkerboard">Checker</option><option value="stripes">Stripes</option><option value="random">Random</option><option value="gradient_height">Gradient H</option></select>
-                        <button class="action-btn" id="fillBtn" style="padding:4px 8px;font-size:10px">Fill</button>
+                <div class="mb-8">
+                    <div class="panel-section-header">Fill & Patterns</div>
+                    <div class="flex-row-wrap">
+                        <select id="fillType" class="form-select-xs"><option value="1">Stone</option><option value="2">Dirt</option><option value="3">Grass</option><option value="7">Wood</option><option value="9">Iron</option><option value="13">Diamond</option></select>
+                        <select id="fillPattern" class="form-select-xs"><option value="solid">Solid</option><option value="checkerboard">Checker</option><option value="stripes">Stripes</option><option value="random">Random</option><option value="gradient_height">Gradient H</option></select>
+                        <button class="action-btn btn-xs" id="fillBtn">Fill</button>
                     </div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap">
-                        <button class="action-btn" id="lineBtn" style="padding:4px 8px;font-size:10px">Line</button>
-                        <button class="action-btn" id="circleBtn" style="padding:4px 8px;font-size:10px">Circle</button>
-                        <button class="action-btn" id="sphereBtn" style="padding:4px 8px;font-size:10px">Sphere</button>
+                    <div class="flex-row-wrap">
+                        <button class="action-btn btn-xs" id="lineBtn">Line</button>
+                        <button class="action-btn btn-xs" id="circleBtn">Circle</button>
+                        <button class="action-btn btn-xs" id="sphereBtn">Sphere</button>
                     </div>
                 </div>
-                <div style="margin-bottom:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Blueprints</div>
-                    <div style="display:flex;gap:4px;margin-bottom:4px">
-                        <input type="text" id="bpName" placeholder="Name" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px">
-                        <button class="action-btn" id="bpSaveBtn" style="padding:4px 8px;font-size:10px">Save</button>
+                <div class="mb-8">
+                    <div class="panel-section-header">Blueprints</div>
+                    <div class="flex-row">
+                        <input type="text" id="bpName" placeholder="Name" class="form-input-xs">
+                        <button class="action-btn btn-xs" id="bpSaveBtn">Save</button>
                     </div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
-                        <button class="action-btn" id="bpExportBtn" style="padding:4px 8px;font-size:10px">Export .BP</button>
-                        <button class="action-btn" id="bpImportBtn" style="padding:4px 8px;font-size:10px">Import .BP</button>
+                    <div class="flex-row-wrap">
+                        <button class="action-btn btn-xs" id="bpExportBtn">Export .BP</button>
+                        <button class="action-btn btn-xs" id="bpImportBtn">Import .BP</button>
                     </div>
-                    <div id="bpList" style="max-height:120px;overflow-y:auto"></div>
+                    <div id="bpList" class="scrollable-list-sm"></div>
                 </div>
-                <div style="margin-bottom:8px">
-                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Export</div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap">
-                        <button class="action-btn" id="exportJSONBtn" style="padding:4px 8px;font-size:10px">JSON</button>
-                        <button class="action-btn" id="exportOBJBtn" style="padding:4px 8px;font-size:10px">OBJ</button>
-                        <button class="action-btn" id="exportGLTFBtn" style="padding:4px 8px;font-size:10px">GLTF</button>
+                <div class="mb-8">
+                    <div class="panel-section-header">Export</div>
+                    <div class="flex-row-wrap">
+                        <button class="action-btn btn-xs" id="exportJSONBtn">JSON</button>
+                        <button class="action-btn btn-xs" id="exportOBJBtn">OBJ</button>
+                        <button class="action-btn btn-xs" id="exportGLTFBtn">GLTF</button>
                     </div>
                 </div>
                 <div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:11px;color:var(--text-dim);text-transform:uppercase">History</span><div style="display:flex;gap:4px"><button class="action-btn" id="historyUndoBtn" style="padding:2px 6px;font-size:10px">Undo</button><button class="action-btn" id="historyRedoBtn" style="padding:2px 6px;font-size:10px">Redo</button><button class="icon-btn" id="historyRefreshBtn">↻</button></div></div>
-                    <div id="historyList" style="max-height:120px;overflow-y:auto"></div>
+                    <div class="flex-between"><span class="panel-section-header">History</span><div class="flex-row"><button class="action-btn btn-xs-sm" id="historyUndoBtn">Undo</button><button class="action-btn btn-xs-sm" id="historyRedoBtn">Redo</button><button class="icon-btn" id="historyRefreshBtn">↻</button></div></div>
+                    <div id="historyList" class="scrollable-list-sm"></div>
                 </div>
             </div>
         </section>
@@ -571,7 +571,7 @@
     </div>
 
     <!-- Ecosystem Graph Overlay -->
-    <div class="eco-graph-overlay" id="ecoGraphOverlay" style="display:none;">
+    <div class="eco-graph-overlay hidden" id="ecoGraphOverlay">
         <div class="eco-graph-header"><span>Population</span>        <button class="icon-btn" id="ecoGraphClose" aria-label="Close ecosystem graph">✕</button></div>
         <canvas id="ecoGraphCanvas" width="300" height="150"></canvas>
     </div>

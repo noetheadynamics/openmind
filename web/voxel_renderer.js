@@ -62,6 +62,15 @@ class VoxelRenderer {
         this._boundOnKeyDown = null;
         this._boundOnKeyUp = null;
 
+        this.fov = 70;
+        this.shadowSize = 60;
+        this.shadowMapSize = 2048;
+        this.zoomSpeed = 0.05;
+        this.rocketOrbitDistance = 30;
+        this.rocketAnimInterval = 50;
+        this.cameraSpeed = 0.5;
+        this.wasmPollInterval = 500;
+
         this.init();
     }
 
@@ -71,7 +80,7 @@ class VoxelRenderer {
         this.scene = new THREE.Scene();
         this.updateTheme();
 
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+        this.camera = new THREE.PerspectiveCamera(this.fov, window.innerWidth / window.innerHeight, 0.1, 500);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -86,8 +95,8 @@ class VoxelRenderer {
         this.sunLight = new THREE.DirectionalLight(0xfff4e0, 1.0);
         this.sunLight.position.set(50, 80, 30);
         this.sunLight.castShadow = true;
-        const s = 60;
-        this.sunLight.shadow.mapSize.set(2048, 2048);
+        const s = this.shadowSize;
+        this.sunLight.shadow.mapSize.set(this.shadowMapSize, this.shadowMapSize);
         this.sunLight.shadow.camera.left = -s;
         this.sunLight.shadow.camera.right = s;
         this.sunLight.shadow.camera.top = s;
@@ -193,7 +202,7 @@ class VoxelRenderer {
 
         el.addEventListener('wheel', (e) => {
             e.preventDefault();
-            this.cameraSpherical.radius = Math.max(3, Math.min(150, this.cameraSpherical.radius + e.deltaY * 0.05));
+            this.cameraSpherical.radius = Math.max(3, Math.min(150, this.cameraSpherical.radius + e.deltaY * this.zoomSpeed));
             this.updateCamera();
         }, { passive: false });
 
@@ -353,7 +362,7 @@ class VoxelRenderer {
         }
     }
 
-    animateBlock(x, y, z, opacity) {
+    animateBlock(x, y, z) {
         this.dirty = true;
     }
 
@@ -376,18 +385,18 @@ class VoxelRenderer {
             this.blocks.delete(`${x},${y + Math.floor(yOffset) - 1},${z}`);
             this.blocks.set(`${x},${y + Math.floor(yOffset)},${z}`, { x, y: y + Math.floor(yOffset), z, type: 32 });
             this.dirty = true;
-            if (yOffset > 30) {
+            if (yOffset > this.rocketOrbitDistance) {
                 clearInterval(interval);
                 this._launchIntervals.delete(key);
                 this.blocks.delete(`${x},${y + Math.floor(yOffset)},${z}`);
                 this.dirty = true;
                 this.addChatMessage('Rocket reached orbit!');
             }
-        }, 50);
+        }, this.rocketAnimInterval);
         this._launchIntervals.set(key, interval);
     }
 
-    animateMaterialChange(x, y, z, material) {
+    animateMaterialChange(x, y, z) {
         this.dirty = true;
     }
 
@@ -540,7 +549,7 @@ class VoxelRenderer {
     }
 
     handleMovement() {
-        const speed = 0.5;
+        const speed = this.cameraSpeed;
         const forward = new THREE.Vector3();
         this.camera.getWorldDirection(forward);
         forward.y = 0; forward.normalize();
@@ -578,16 +587,16 @@ class VoxelRenderer {
             this.render();
         };
         loop();
-        this.wasmPollInterval = setInterval(() => {
+        this._wasmPollTimer = setInterval(() => {
             if (!this.running) return;
             this.updateFromWASM();
             this.rebuildMesh();
-        }, 500);
+        }, this.wasmPollInterval);
     }
 
     stop() {
         this.running = false;
-        if (this.wasmPollInterval) { clearInterval(this.wasmPollInterval); this.wasmPollInterval = null; }
+        if (this._wasmPollTimer) { clearInterval(this._wasmPollTimer); this._wasmPollTimer = null; }
         this._launchIntervals.forEach(iv => clearInterval(iv));
         this._launchIntervals.clear();
     }

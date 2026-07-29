@@ -230,6 +230,15 @@ bool VoxelOctreeNode::setBlockDensity(int x, int y, int z, float density) {
     return false;
 }
 
+void VoxelOctreeNode::traverse(VisitCallback callback) const {
+    if (voxelData && voxelData->occupied) {
+        if (!callback(*voxelData, offsetX, offsetY, offsetZ, depth)) return;
+    }
+    for (const auto& child : children) {
+        if (child) child->traverse(callback);
+    }
+}
+
 void VoxelOctreeNode::calculateMemoryUsage(int& count) const {
     if (voxelData && voxelData->occupied) count++;
     for (const auto& child : children) {
@@ -562,6 +571,12 @@ int VoxelOctree::getMemoryUsage() const {
 
 int VoxelOctree::getBlockCount() const {
     return blockCount;
+}
+
+void VoxelOctree::traverse(VisitCallback callback) const {
+    if (root) {
+        root->traverse(callback);
+    }
 }
 
 VoxelOctree VoxelOctree::createTestWorld() {
