@@ -207,16 +207,19 @@ class OmniConsole {
                 const dt = 1/60;
                 try {
                     this.engine.tick(dt);
+                    if (this.renderer) this.renderer.dirty = true;
                     this.interactive.tick(dt);
                     this.particles.update(dt);
                     if (this.physicsVisuals) this.physicsVisuals.update(dt);
-                    if (this.skybox) {
+                    this._skyUpdateCount = (this._skyUpdateCount || 0) + 1;
+                    if (this.skybox && this._skyUpdateCount % 4 === 0) {
                         const tod = this.engine.getTimeOfDay();
                         const w = this.engine.getWeather();
                         const wn = this.engine.weatherNames[w.type] || 'clear';
                         this.skybox.update(dt, tod, wn);
                     }
-                    if (this.water) {
+                    this._waterUpdateCount = (this._waterUpdateCount || 0) + 1;
+                    if (this.water && this._waterUpdateCount % 2 === 0) {
                         const tod = this.engine.getTimeOfDay();
                         const w = this.engine.getWeather();
                         const wn = this.engine.weatherNames[w.type] || 'clear';
@@ -490,6 +493,7 @@ class OmniConsole {
         div.appendChild(bubble);
         chat.appendChild(div);
         chat.scrollTop = chat.scrollHeight;
+        while (chat.children.length > 200) chat.removeChild(chat.firstChild);
     }
 
     _escapeHtml(str) {

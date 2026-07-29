@@ -74,6 +74,7 @@ class EngineConnection {
     }
 
     setBlock(x, y, z, type, propsJson) {
+        if (this.renderer) this.renderer.dirty = true;
         if (propsJson) {
             return this.call('setBlock', 'number', ['number','number','number','number','string'], [x, y, z, type, propsJson]);
         } else {

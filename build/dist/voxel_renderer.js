@@ -69,7 +69,7 @@ class VoxelRenderer {
         this.rocketOrbitDistance = 30;
         this.rocketAnimInterval = 50;
         this.cameraSpeed = 0.5;
-        this.wasmPollInterval = 500;
+        this.wasmPollInterval = 1000;
 
         this.init();
     }
@@ -589,6 +589,7 @@ class VoxelRenderer {
         loop();
         this._wasmPollTimer = setInterval(() => {
             if (!this.running) return;
+            if (!this.dirty) return;
             this.updateFromWASM();
             this.rebuildMesh();
         }, this.wasmPollInterval);

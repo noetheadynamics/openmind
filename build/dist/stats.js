@@ -55,12 +55,6 @@ class LiveStats {
         const tod = this.engine.getTimeOfDay();
         const agentCount = this.engine.getAgentCount();
 
-        const agents = [];
-        for (let i = 0; i < agentCount; i++) {
-            const a = this.engine.getAgentData(i);
-            if (a && a.exists) agents.push(a);
-        }
-
         const data = {
             totalBlocks: stats.totalBlocks || 0,
             currentTick: stats.currentTick || 0,
@@ -69,10 +63,7 @@ class LiveStats {
             timeOfDay: tod,
             weatherType: weather.type || 0,
             weatherName: ['CLEAR', 'RAIN', 'SNOW', 'STORM', 'FOG'][weather.type] || 'CLEAR',
-            agentCount: agents.length,
-            livingEntities: agents.filter(a => a.isAlive).length,
-            predators: agents.filter(a => a.isPredator && a.isAlive).length,
-            prey: agents.filter(a => !a.isPredator && a.isAlive).length,
+            agentCount: agentCount,
             fps: this.fps,
             rendererBlocks: this.renderer ? this.renderer.blocks.size : 0
         };
