@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenMind – Universal Voxel Sandbox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #08080d;
+            --bg2: #0e0e16;
+            --accent: #6366f1;
+            --accent2: #818cf8;
+            --text: #f1f5f9;
+            --text2: #94a3b8;
+            --glass-bg: rgba(255,255,255,0.05);
+            --glass-border: rgba(255,255,255,0.1);
+        }
+
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; color: var(--text); }
+        body { background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 50%, #0a0f1a 100%); display: flex; align-items: center; justify-content: center; }
+
+        .bg-grid { position: fixed; inset: 0; background-image: linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px); background-size: 60px 60px; pointer-events: none; z-index: 0; }
+        .bg-glow { position: fixed; width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%); top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; z-index: 0; }
+
+        .prompt-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 10; transition: all 0.8s cubic-bezier(0.4,0,0.2,1); width: 560px; max-width: 92vw; }
+        .prompt-container.minimized { top: auto; left: 20px; bottom: 20px; transform: none; width: 320px; }
+
+        .glass-panel { background: var(--glass-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--glass-border); border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04); padding: 40px 36px 36px; transition: all 0.8s cubic-bezier(0.4,0,0.2,1); }
+        .prompt-container.minimized .glass-panel { padding: 16px 20px; border-radius: 14px; }
+
+        .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; transition: margin 0.8s cubic-bezier(0.4,0,0.2,1); }
+        .prompt-container.minimized .logo-row { margin-bottom: 0; }
+        .logo-icon { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a78bfa); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .logo-icon svg { width: 18px; height: 18px; fill: white; }
+        .logo-text { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+
+        .prompt-subtitle { color: var(--text2); font-size: 13px; margin-bottom: 20px; font-weight: 400; transition: all 0.3s, max-height 0.8s cubic-bezier(0.4,0,0.2,1), opacity 0.4s; max-height: 60px; overflow: hidden; }
+        .prompt-container.minimized .prompt-subtitle { max-height: 0; margin-bottom: 0; opacity: 0; }
+
+        .input-wrapper { position: relative; margin-bottom: 18px; transition: all 0.3s, margin 0.8s cubic-bezier(0.4,0,0.2,1), max-height 0.8s cubic-bezier(0.4,0,0.2,1), opacity 0.4s; max-height: 200px; overflow: hidden; }
+        .prompt-container.minimized .input-wrapper { max-height: 0; margin-bottom: 0; opacity: 0; }
+
+        .prompt-input { width: 100%; min-height: 110px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 16px 18px; color: var(--text); font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+        .prompt-input::placeholder { color: var(--text2); opacity: 0.5; }
+        .prompt-input:focus { border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+
+        .button-row { display: flex; gap: 10px; transition: all 0.3s, max-height 0.8s cubic-bezier(0.4,0,0.2,1), opacity 0.4s; max-height: 60px; overflow: hidden; }
+        .prompt-container.minimized .button-row { max-height: 0; opacity: 0; }
+
+        .btn { flex: 1; padding: 12px 18px; border-radius: 11px; border: none; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 7px; }
+        .btn svg { width: 15px; height: 15px; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), #7c3aed); color: white; box-shadow: 0 2px 10px rgba(99,102,241,0.35); }
+        .btn-primary:hover { background: linear-gradient(135deg, var(--accent2), #8b5cf6); box-shadow: 0 4px 18px rgba(99,102,241,0.5); transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text2); border: 1px solid rgba(255,255,255,0.08); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+        .minimized-label { display: flex; align-items: center; gap: 10px; cursor: default; padding: 2px 0; }
+        .minimized-spinner { display: inline-flex; gap: 3px; align-items: center; }
+        .minimized-spinner .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+        .minimized-spinner .dot:nth-child(2) { animation-delay: 0.15s; }
+        .minimized-spinner .dot:nth-child(3) { animation-delay: 0.3s; }
+        .gen-status { font-size: 11px; color: var(--accent2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+        .gen-prompt-text { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+
+        @keyframes pulse { 0%,80%,100% { opacity: 0.2; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
+
+        .stats-overlay { position: fixed; top: 20px; right: 20px; z-index: 20; background: var(--glass-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px 20px; min-width: 260px; opacity: 0; pointer-events: none; transition: opacity 0.4s; font-family: 'JetBrains Mono', monospace; }
+        .stats-overlay.visible { opacity: 1; pointer-events: auto; }
+        .stats-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent2); margin-bottom: 12px; font-family: 'Inter', sans-serif; }
+        .stats-section { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .stats-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .stats-row:last-child { border-bottom: none; }
+        .stats-label { font-size: 11px; color: var(--text2); }
+        .stats-value { font-size: 12px; color: var(--text); font-weight: 500; }
+        .stats-value.highlight { color: var(--accent2); }
+
+        .controls-overlay { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; background: var(--glass-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 14px; padding: 10px 16px; display: flex; gap: 8px; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+        .controls-overlay.visible { opacity: 1; pointer-events: auto; }
+        .ctrl-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.05); color: var(--text2); font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+        .ctrl-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .ctrl-select { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; outline: none; }
+        .ctrl-label { font-size: 11px; color: var(--text2); margin-right: 4px; }
+
+        .console-overlay { position: fixed; bottom: 80px; right: 20px; z-index: 20; background: var(--glass-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 14px; padding: 14px 18px; width: 340px; max-height: 200px; overflow-y: auto; opacity: 0; pointer-events: none; transition: opacity 0.4s; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+        .console-overlay.visible { opacity: 1; pointer-events: auto; }
+        .console-line { color: var(--text2); padding: 2px 0; line-height: 1.5; }
+        .console-line .time { color: #475569; margin-right: 6px; }
+        .console-line .msg { color: var(--text); }
+        .console-line .ok { color: #4ade80; }
+        .console-line .warn { color: #fbbf24; }
+        .console-line .err { color: #f87171; }
+
+        .loading-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(8,8,13,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .loading-overlay.visible { opacity: 1; pointer-events: auto; }
+        .loading-spinner { width: 48px; height: 48px; border: 3px solid rgba(99,102,241,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 14px; color: var(--text2); }
+
+        @media (max-width: 600px) {
+            .glass-panel { padding: 28px 24px 24px; }
+            .prompt-container.minimized { width: calc(100vw - 32px); }
+            .stats-overlay { top: auto; bottom: 20px; right: 20px; width: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="bg-glow"></div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingText">Initializing OpenMind Engine...</div>
+    </div>
+
+    <div class="stats-overlay" id="statsOverlay">
+        <div class="stats-title">World Stats</div>
+        <div class="stats-row"><span class="stats-label">Blocks</span><span class="stats-value highlight" id="statBlocks">0</span></div>
+        <div class="stats-row"><span class="stats-label">Tick</span><span class="stats-value" id="statTick">0</span></div>
+        <div class="stats-row"><span class="stats-label">Time Scale</span><span class="stats-value" id="statTimeScale">1.0x</span></div>
+        <div class="stats-row"><span class="stats-label">Temperature</span><span class="stats-value" id="statTemp">293.15 K</span></div>
+        <div class="stats-row"><span class="stats-label">Entities</span><span class="stats-value" id="statEntities">0</span></div>
+        <div class="stats-row"><span class="stats-label">FPS</span><span class="stats-value highlight" id="statFPS">0</span></div>
+        <div class="stats-section">
+            <div class="stats-row"><span class="stats-label">Time of Day</span><span class="stats-value" id="statTimeOfDay">06:00</span></div>
+            <div class="stats-row"><span class="stats-label">Sun Intensity</span><span class="stats-value" id="statSunIntensity">0.00</span></div>
+            <div class="stats-row"><span class="stats-label">Weather</span><span class="stats-value" id="statWeather">CLEAR</span></div>
+            <div class="stats-row"><span class="stats-label">Visibility</span><span class="stats-value" id="statVisibility">100%</span></div>
+        </div>
+    </div>
+
+    <div class="console-overlay" id="consoleOverlay">
+        <div class="console-line"><span class="time">[init]</span><span class="msg">Engine ready.</span></div>
+    </div>
+
+    <div class="controls-overlay" id="controlsOverlay">
+        <button class="ctrl-btn" id="pauseBtn" title="Pause/Resume">Pause</button>
+        <button class="ctrl-btn" id="slowBtn" title="0.25x Speed">0.25x</button>
+        <button class="ctrl-btn active" id="normalBtn" title="1x Speed">1x</button>
+        <button class="ctrl-btn" id="fastBtn" title="4x Speed">4x</button>
+        <button class="ctrl-btn" id="rewindBtn" title="Rewind 1s">Rewind</button>
+        <span class="ctrl-label">Weather:</span>
+        <select class="ctrl-select" id="weatherSelect">
+            <option value="0">Clear</option>
+            <option value="1">Rain</option>
+            <option value="2">Snow</option>
+            <option value="3">Storm</option>
+            <option value="4">Fog</option>
+        </select>
+        <span class="ctrl-label">Time:</span>
+        <select class="ctrl-select" id="timeSelect">
+            <option value="0">Midnight</option>
+            <option value="6" selected>Sunrise</option>
+            <option value="12">Noon</option>
+            <option value="18">Sunset</option>
+        </select>
+    </div>
+
+    <div class="prompt-container" id="promptContainer">
+        <div class="glass-panel">
+            <div class="logo-row">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </div>
+                <span class="logo-text">OpenMind</span>
+            </div>
+
+            <p class="prompt-subtitle">Describe the world you want to build. The engine brings it to life.</p>
+
+            <div class="input-wrapper" id="inputWrapper">
+                <textarea class="prompt-input" id="promptInput" placeholder="What would you like to create today?" rows="4"></textarea>
+            </div>
+
+            <div class="button-row" id="buttonRow">
+                <button class="btn btn-primary" id="generateBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    Generate
+                </button>
+                <button class="btn btn-secondary" id="loadBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    Load Project
+                </button>
+            </div>
+
+            <div class="minimized-label" id="minimizedLabel" style="display:none;">
+                <div class="minimized-spinner"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                <span class="gen-status">Running</span>
+                <span class="gen-prompt-text" id="minimizedPromptText"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let wasmReady = false;
+        let simRunning = false;
+        let paused = false;
+        let lastFrameTime = 0;
+        let frameCount = 0;
+        let fpsDisplay = 0;
+
+        const promptContainer = document.getElementById('promptContainer');
+        const promptInput = document.getElementById('promptInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const loadBtn = document.getElementById('loadBtn');
+        const statsOverlay = document.getElementById('statsOverlay');
+        const consoleOverlay = document.getElementById('consoleOverlay');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const minimizedLabel = document.getElementById('minimizedLabel');
+        const minimizedPromptText = document.getElementById('minimizedPromptText');
+        const controlsOverlay = document.getElementById('controlsOverlay');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const weatherSelect = document.getElementById('weatherSelect');
+        const timeSelect = document.getElementById('timeSelect');
+
+        const WEATHER_NAMES = ['CLEAR', 'RAIN', 'SNOW', 'STORM', 'FOG'];
+
+        function logConsole(msg, type = '') {
+            const line = document.createElement('div');
+            line.className = 'console-line';
+            const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            line.innerHTML = `<span class="time">[${now}]</span><span class="msg ${type}">${msg}</span>`;
+            consoleOverlay.appendChild(line);
+            consoleOverlay.scrollTop = consoleOverlay.scrollHeight;
+        }
+
+        function formatTime(hours) {
+            const h = Math.floor(hours) % 24;
+            const m = Math.floor((hours - Math.floor(hours)) * 60);
+            return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        }
+
+        async function loadWASM() {
+            loadingOverlay.classList.add('visible');
+            loadingText.textContent = 'Loading WebAssembly engine...';
+
+            try {
+                if (typeof Module === 'undefined') {
+                    throw new Error('Module not found. Ensure openmind.js is loaded.');
+                }
+
+                await new Promise((resolve, reject) => {
+                    if (Module._initWorld) { resolve(); return; }
+                    Module.onRuntimeInitialized = () => resolve();
+                    setTimeout(() => reject(new Error('WASM load timeout')), 15000);
+                });
+
+                wasmReady = true;
+                loadingOverlay.classList.remove('visible');
+                logConsole('WASM engine loaded successfully.', 'ok');
+            } catch (err) {
+                loadingText.textContent = 'WASM load failed. Running in demo mode.';
+                logConsole('WASM load failed: ' + err.message + '. Using fallback.', 'warn');
+                setTimeout(() => {
+                    loadingOverlay.classList.remove('visible');
+                    wasmReady = false;
+                }, 2000);
+            }
+        }
+
+        function generateTestWorld() {
+            if (!wasmReady) {
+                logConsole('Demo mode: UI-only simulation.', 'warn');
+                statsOverlay.classList.add('visible');
+                controlsOverlay.classList.add('visible');
+                simRunning = true;
+                requestAnimationFrame(renderLoop);
+                return;
+            }
+
+            logConsole('Initializing world...');
+            Module._initWorld();
+
+            logConsole('Setting time of day to sunrise...');
+            Module.ccall('setTimeOfDay', null, ['number'], [6]);
+
+            logConsole('Generating 10x10 dirt platform...');
+            for (let x = 0; x < 10; x++) {
+                for (let z = 0; z < 10; z++) {
+                    Module.ccall('setBlockSimple', 'number', ['number','number','number','number'], [x, 0, z, 1]);
+                }
+            }
+
+            logConsole('Placing Grass on top...');
+            for (let x = 0; x < 10; x++) {
+                for (let z = 0; z < 10; z++) {
+                    Module.ccall('setBlockSimple', 'number', ['number','number','number','number'], [x, 1, z, 2]);
+                }
+            }
+
+            logConsole('Placing Steel block at (5,2,5)...');
+            const steelJson = JSON.stringify({
+                mass: 7.85, density: 7850, hardness: 8.0, elasticity: 0.29,
+                tensileStrength: 400, thermalConductivity: 50, specificHeat: 500,
+                composition: "Fe-C alloy", baseColor: "#71797E"
+            });
+            Module.ccall('setBlock', 'number', ['number','number','number','number','string'], [5, 2, 5, 9, steelJson]);
+
+            logConsole('Placing Water block at (1,2,1)...');
+            const waterJson = JSON.stringify({ mass: 1.0, density: 1000, composition: "H2O", baseColor: "#1E90FF" });
+            Module.ccall('setBlock', 'number', ['number','number','number','number','string'], [1, 2, 1, 7, waterJson]);
+
+            logConsole('Placing Wood block at (8,2,8)...');
+            const woodJson = JSON.stringify({ mass: 0.7, density: 700, composition: "C8H18", flammability: 0.8, baseColor: "#8B4513" });
+            Module.ccall('setBlock', 'number', ['number','number','number','number','string'], [8, 2, 8, 4, woodJson]);
+
+            logConsole('Placing Leaves on Wood...');
+            const leafJson = JSON.stringify({ mass: 0.3, density: 300, growthRate: 0.5, baseColor: "#228B22" });
+            Module.ccall('setBlock', 'number', ['number','number','number','number','string'], [8, 3, 8, 5, leafJson]);
+            Module.ccall('setBlock', 'number', ['number','number','number','number','string'], [8, 4, 8, 5, leafJson]);
+
+            logConsole('Placing Sand at (3,2,3)...');
+            Module.ccall('setBlockSimple', 'number', ['number','number','number','number'], [3, 2, 3, 8]);
+
+            logConsole('Placing Bedrock at (5,0,5)...');
+            Module.ccall('setBlockSimple', 'number', ['number','number','number','number'], [5, 0, 5, 15]);
+
+            logConsole('World generation complete. Starting physics loop.', 'ok');
+
+            statsOverlay.classList.add('visible');
+            consoleOverlay.classList.add('visible');
+            controlsOverlay.classList.add('visible');
+            simRunning = true;
+            requestAnimationFrame(renderLoop);
+        }
+
+        function renderLoop(timestamp) {
+            if (!simRunning) return;
+
+            frameCount++;
+            if (timestamp - lastFrameTime >= 1000) {
+                fpsDisplay = frameCount;
+                frameCount = 0;
+                lastFrameTime = timestamp;
+            }
+
+            if (wasmReady && !paused) {
+                Module.ccall('tickPhysicsDelta', 'number', ['number'], [1/60]);
+
+                const statsJson = Module.ccall('getWorldStats', 'string', [], []);
+                try {
+                    const stats = JSON.parse(statsJson);
+                    document.getElementById('statBlocks').textContent = stats.totalBlocks || 0;
+                    document.getElementById('statTick').textContent = stats.currentTick || 0;
+                    document.getElementById('statTimeScale').textContent = (stats.timeScale || 1).toFixed(1) + 'x';
+                    document.getElementById('statTemp').textContent = (stats.averageTemperature || 293.15).toFixed(1) + ' K';
+                    document.getElementById('statEntities').textContent = stats.livingEntities || 0;
+                } catch (e) {}
+
+                try {
+                    const tod = Module.ccall('getTimeOfDay', 'number', [], []);
+                    document.getElementById('statTimeOfDay').textContent = formatTime(tod);
+
+                    const sunI = Module.ccall('getSunlightIntensity', 'number', [], []);
+                    document.getElementById('statSunIntensity').textContent = sunI.toFixed(2);
+
+                    const weatherJson = Module.ccall('getWeather', 'string', [], []);
+                    const weather = JSON.parse(weatherJson);
+                    document.getElementById('statWeather').textContent = WEATHER_NAMES[weather.type] || 'CLEAR';
+                    document.getElementById('statVisibility').textContent = Math.round((weather.visibility || 1) * 100) + '%';
+                } catch (e) {}
+            }
+
+            document.getElementById('statFPS').textContent = fpsDisplay;
+            requestAnimationFrame(renderLoop);
+        }
+
+        function handleCommand(text) {
+            const lower = text.toLowerCase().trim();
+
+            if (lower.startsWith('weather ')) {
+                const w = lower.replace('weather ', '');
+                const map = { clear: 0, rain: 1, snow: 2, storm: 3, fog: 4 };
+                if (map[w] !== undefined && wasmReady) {
+                    Module.ccall('setWeather', null, ['number'], [map[w]]);
+                    weatherSelect.value = map[w];
+                    logConsole('Weather set to ' + w.toUpperCase(), 'ok');
+                }
+            } else if (lower.startsWith('time ')) {
+                const t = parseFloat(lower.replace('time ', ''));
+                if (!isNaN(t) && wasmReady) {
+                    Module.ccall('setTimeOfDay', null, ['number'], [t]);
+                    logConsole('Time set to ' + formatTime(t), 'ok');
+                }
+            } else if (lower === 'pause') {
+                paused = true;
+                pauseBtn.textContent = 'Resume';
+                pauseBtn.classList.add('active');
+                logConsole('Simulation paused.', 'ok');
+            } else if (lower === 'resume' || lower === 'unpause') {
+                paused = false;
+                pauseBtn.textContent = 'Pause';
+                pauseBtn.classList.remove('active');
+                logConsole('Simulation resumed.', 'ok');
+            } else if (lower.startsWith('speed ')) {
+                const s = parseFloat(lower.replace('speed ', ''));
+                if (!isNaN(s) && wasmReady) {
+                    Module.ccall('setTimeScale', null, ['number'], [s]);
+                    logConsole('Time scale set to ' + s + 'x', 'ok');
+                }
+            } else if (lower === 'stats' && wasmReady) {
+                const statsJson = Module.ccall('getWorldStats', 'string', [], []);
+                logConsole('Stats: ' + statsJson, 'ok');
+            } else if (lower === 'help') {
+                logConsole('Commands: weather <clear|rain|snow|storm|fog>, time <hours>, pause, resume, speed <multiplier>, stats', 'ok');
+            } else {
+                logConsole('Unknown command: ' + text + '. Type "help" for commands.', 'warn');
+            }
+        }
+
+        function generateWorld() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                promptInput.style.borderColor = 'rgba(239,68,68,0.6)';
+                setTimeout(() => { promptInput.style.borderColor = ''; }, 1200);
+                return;
+            }
+
+            if (prompt.toLowerCase().startsWith('/') || prompt.toLowerCase().startsWith('weather ') || prompt.toLowerCase().startsWith('time ') || prompt.toLowerCase() === 'pause' || prompt.toLowerCase() === 'resume' || prompt.toLowerCase().startsWith('speed ') || prompt.toLowerCase() === 'stats' || prompt.toLowerCase() === 'help') {
+                handleCommand(prompt);
+                promptInput.value = '';
+                return;
+            }
+
+            minimizedPromptText.textContent = prompt;
+            promptContainer.classList.add('minimized');
+            minimizedLabel.style.display = 'flex';
+
+            generateTestWorld();
+        }
+
+        pauseBtn.addEventListener('click', () => {
+            paused = !paused;
+            pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+            pauseBtn.classList.toggle('active', paused);
+            logConsole(paused ? 'Paused' : 'Resumed', 'ok');
+        });
+
+        document.getElementById('slowBtn').addEventListener('click', () => {
+            if (wasmReady) { Module.ccall('setTimeScale', null, ['number'], [0.25]); logConsole('Speed: 0.25x', 'ok'); }
+        });
+        document.getElementById('normalBtn').addEventListener('click', () => {
+            if (wasmReady) { Module.ccall('setTimeScale', null, ['number'], [1]); logConsole('Speed: 1x', 'ok'); }
+        });
+        document.getElementById('fastBtn').addEventListener('click', () => {
+            if (wasmReady) { Module.ccall('setTimeScale', null, ['number'], [4]); logConsole('Speed: 4x', 'ok'); }
+        });
+        document.getElementById('rewindBtn').addEventListener('click', () => {
+            if (wasmReady) {                     Module.ccall('rewindTime', 'number', ['number'], [60]); logConsole('Rewound 1 second.', 'ok'); }
+        });
+
+        weatherSelect.addEventListener('change', () => {
+            if (wasmReady) {
+                Module.ccall('setWeather', null, ['number'], [parseInt(weatherSelect.value)]);
+                logConsole('Weather: ' + WEATHER_NAMES[parseInt(weatherSelect.value)], 'ok');
+            }
+        });
+
+        timeSelect.addEventListener('change', () => {
+            if (wasmReady) {
+                Module.ccall('setTimeOfDay', null, ['number'], [parseFloat(timeSelect.value)]);
+                logConsole('Time: ' + formatTime(parseFloat(timeSelect.value)), 'ok');
+            }
+        });
+
+        generateBtn.addEventListener('click', generateWorld);
+        loadBtn.addEventListener('click', () => { logConsole('Load Project: coming soon.', 'warn'); });
+        promptInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generateBtn.click(); });
+
+        consoleOverlay.classList.add('visible');
+        loadWASM();
+    </script>
+
+    <script src="openmind.js"></script>
+</body>
+</html>

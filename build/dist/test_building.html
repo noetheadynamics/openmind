@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5z' fill='%236366f1'/></svg>">
+    <title>OpenMind – Building Tools Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+        #viewport3d { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        #testPanel {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 16px; width: 420px; max-height: 90vh;
+            overflow-y: auto; backdrop-filter: blur(12px); font-size: 13px;
+        }
+        #testPanel h2 { color: #8b5cf6; margin-bottom: 12px; font-size: 16px; }
+        .tg { margin-bottom: 10px; border-bottom: 1px solid rgba(100,100,200,0.2); padding-bottom: 8px; }
+        .tg h3 { color: #60a5fa; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; }
+        .tr { display: flex; align-items: center; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+        .tb {
+            padding: 3px 8px; border: 1px solid rgba(100,100,200,0.4); border-radius: 6px;
+            background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 10px;
+        }
+        .tb:hover { background: rgba(60,60,120,0.8); border-color: #8b5cf6; }
+        .r { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+        .pass { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .fail { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .pending { background: rgba(234,179,8,0.2); color: #eab308; }
+        #log { margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 10px; color: #94a3b8; }
+        #log div { padding: 2px 0; border-bottom: 1px solid rgba(100,100,200,0.1); }
+        #log .ok { color: #22c55e; } #log .err { color: #ef4444; } #log .info { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div id="viewport3d"></div>
+
+    <div id="testPanel">
+        <h2>Building Tools Test</h2>
+
+        <div class="tg">
+            <h3>1. Selection (Box)</h3>
+            <div class="tr"><button class="tb" onclick="testBoxSelect()">Box Select 5x5x5</button><span id="t1" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>2. Selection (Brush)</h3>
+            <div class="tr"><button class="tb" onclick="testBrushSelect()">Brush r=3</button><span id="t2" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>3. Copy & Paste</h3>
+            <div class="tr"><button class="tb" onclick="testCopyPaste()">Copy → Paste at 10,2,0</button><span id="t3" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>4. Copy Rotate</h3>
+            <div class="tr"><button class="tb" onclick="testCopyRotate()">Copy → Rotate 90° → Paste</button><span id="t4" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>5. Blueprint Save/Load</h3>
+            <div class="tr"><button class="tb" onclick="testBlueprintSave()">Save BP</button><button class="tb" onclick="testBlueprintLoad()">Load BP</button><span id="t5" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>6. Blueprint Export/Import</h3>
+            <div class="tr"><button class="tb" onclick="testBPExportImport()">Export → Import</button><span id="t6" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>7. Symmetry</h3>
+            <div class="tr"><button class="tb" onclick="testSymmetryX()">Sym X</button><button class="tb" onclick="testSymmetryYZ()">Sym Y+Z</button><span id="t7" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>8. Pattern Fill</h3>
+            <div class="tr"><button class="tb" onclick="testFillSolid()">Solid</button><button class="tb" onclick="testFillChecker()">Checker</button><button class="tb" onclick="testFillGradient()">Gradient</button><span id="t8" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>9. Line/Circle/Sphere</h3>
+            <div class="tr"><button class="tb" onclick="testLine()">Line</button><button class="tb" onclick="testCircle()">Circle</button><button class="tb" onclick="testSphere()">Sphere</button><span id="t9" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>10. Export JSON/OBJ</h3>
+            <div class="tr"><button class="tb" onclick="testExportJSON()">JSON</button><button class="tb" onclick="testExportOBJ()">OBJ</button><span id="t10" class="r pending">pending</span></div>
+        </div>
+
+        <div class="tg">
+            <h3>11. Building History</h3>
+            <div class="tr"><button class="tb" onclick="testHistory()">3 Actions → Undo → Redo</button><span id="t11" class="r pending">pending</span></div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script src="ui_connection.js"></script>
+    <script src="selection.js"></script>
+    <script src="copy_paste.js"></script>
+    <script src="blueprints.js"></script>
+    <script src="symmetry.js"></script>
+    <script src="pattern_tools.js"></script>
+    <script src="import_export_building.js"></script>
+    <script src="building_history.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="voxel_renderer.js"></script>
+    <script src="llm_client.js"></script>
+
+    <script>
+        let engine, sel, cp, bp, sym, pt, ieb, bh, renderer;
+
+        function log(msg, cls) {
+            const div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function setR(id, pass) {
+            const el = document.getElementById(id);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'r ' + (pass ? 'pass' : 'fail');
+        }
+
+        async function init() {
+            log('Loading WASM...', 'info');
+            engine = new EngineConnection();
+            const ok = await engine.load();
+            if (!ok) { log('WASM failed', 'err'); return; }
+            engine.initWorld();
+            log('WASM ready', 'ok');
+
+            renderer = new VoxelRenderer('viewport3d');
+            renderer.start(engine);
+
+            sel = new Selection();
+            sel.setScene(renderer.scene);
+            cp = new CopyPaste();
+            cp.setScene(renderer.scene);
+            cp.setEngine(engine);
+            bp = new BlueprintSystem();
+            await bp.init();
+            sym = new Symmetry();
+            sym.setScene(renderer.scene);
+            pt = new PatternTools();
+            pt.setEngine(engine);
+            ieb = new ImportExportBuilding();
+            ieb.setEngine(engine);
+            bh = new BuildingHistory();
+            bh.setEngine(engine);
+            log('All modules ready', 'ok');
+        }
+
+        function buildBlock(x, y, z, type) { engine.setBlock(x, y, z, type); }
+
+        function buildStructure() {
+            for (let x = 0; x < 5; x++)
+                for (let y = 0; y < 5; y++)
+                    for (let z = 0; z < 5; z++)
+                        buildBlock(x, y, z, (x + y + z) % 3 === 0 ? 1 : 3);
+        }
+
+        function testBoxSelect() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            const dims = sel.getDimensions();
+            const pass = dims.x === 5 && dims.y === 5 && dims.z === 5 && dims.count === 125;
+            setR('t1', pass);
+            log('BoxSelect: ' + dims.x + 'x' + dims.y + 'x' + dims.z + ' (' + dims.count + ' blocks)', pass ? 'ok' : 'err');
+        }
+
+        function testBrushSelect() {
+            buildStructure();
+            sel.setMode('brush');
+            sel.brushSize = 5;
+            sel.brushAt(2, 2, 2, engine);
+            const dims = sel.getDimensions();
+            const pass = dims.count > 0;
+            setR('t2', pass);
+            log('BrushSelect: ' + dims.count + ' blocks', pass ? 'ok' : 'err');
+        }
+
+        function testCopyPaste() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            cp.copy(sel);
+            cp.paste(10, 2, 0, sel);
+            const b = engine.getBlock(10, 2, 0);
+            const pass = cp.hasClipboard() && b && b.exists;
+            setR('t3', pass);
+            log('CopyPaste: clipboard=' + cp.hasClipboard() + ' block(10,2,0)=' + (b?.blockType), pass ? 'ok' : 'err');
+        }
+
+        function testCopyRotate() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            cp.copy(sel);
+            cp.rotate(90);
+            cp.paste(20, 2, 0, sel);
+            const pass = cp.hasClipboard() && cp.rotation === 1;
+            setR('t4', pass);
+            log('CopyRotate: rotation=' + (cp.rotation * 90) + '°', pass ? 'ok' : 'err');
+        }
+
+        async function testBlueprintSave() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            const b = bp.create('TestBP', sel, engine);
+            const pass = b && b.blocks.length > 0;
+            setR('t5', pass);
+            log('BlueprintSave: ' + (b?.name) + ' (' + b?.blocks.length + ' blocks)', pass ? 'ok' : 'err');
+        }
+
+        async function testBlueprintLoad() {
+            const all = bp.getAll();
+            if (all.length === 0) { setR('t5', false); log('BlueprintLoad: no blueprints', 'err'); return; }
+            const placed = bp.place(all[0], 15, 2, 0, engine);
+            const pass = placed > 0;
+            setR('t5', pass);
+            log('BlueprintLoad: placed ' + placed + ' blocks', pass ? 'ok' : 'err');
+        }
+
+        function testBPExportImport() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            const b = bp.create('ExportTest', sel, engine);
+            const json = bp.exportBP(b);
+            const imported = bp.importBP(json);
+            const pass = json && imported && imported.name === 'ExportTest';
+            setR('t6', pass);
+            log('BPExportImport: exported=' + !!json + ' imported=' + (imported?.name), pass ? 'ok' : 'err');
+        }
+
+        function testSymmetryX() {
+            sym.enable = true;
+            sym.axes.clear();
+            sym.axes.add('x');
+            sym.center = { x: 5, y: 0, z: 0 };
+            const positions = sym.getMirrorPositions(3, 0, 0);
+            const pass = positions.length === 2 && positions.some(p => p.x === 7);
+            setR('t7', pass);
+            log('SymmetryX: mirror(3,0,0)=' + JSON.stringify(positions), pass ? 'ok' : 'err');
+            sym.disable();
+        }
+
+        function testSymmetryYZ() {
+            sym.enable = true;
+            sym.axes.clear();
+            sym.axes.add('y');
+            sym.axes.add('z');
+            sym.center = { x: 0, y: 5, z: 5 };
+            const positions = sym.getMirrorPositions(0, 3, 3);
+            const pass = positions.length === 4;
+            setR('t7', pass);
+            log('SymmetryYZ: mirror(0,3,3)=' + positions.length + ' positions', pass ? 'ok' : 'err');
+            sym.disable();
+        }
+
+        function testFillSolid() {
+            const bounds = { minX: 0, minY: 0, minZ: 0, maxX: 4, maxY: 4, maxZ: 4 };
+            const count = pt.fillArea(bounds, 1, 'solid');
+            const b = engine.getBlock(2, 2, 2);
+            setR('t8', count === 125 && b?.blockType === 1);
+            log('FillSolid: ' + count + ' blocks', 'ok');
+        }
+
+        function testFillChecker() {
+            const bounds = { minX: 10, minY: 0, minZ: 0, maxX: 14, maxY: 0, maxZ: 4 };
+            const count = pt.fillArea(bounds, 1, 'checkerboard', { secondaryType: 3 });
+            setR('t8', count > 0);
+            log('FillChecker: ' + count + ' blocks', 'ok');
+        }
+
+        function testFillGradient() {
+            const bounds = { minX: 20, minY: 0, minZ: 0, maxX: 24, maxY: 4, maxZ: 0 };
+            const count = pt.fillArea(bounds, 1, 'gradient_height', { gradientTypes: [1, 3, 7, 9] });
+            setR('t8', count > 0);
+            log('FillGradient: ' + count + ' blocks', 'ok');
+        }
+
+        function testLine() {
+            const count = pt.line(0, 5, 0, 10, 5, 0, 1);
+            setR('t9', count > 0);
+            log('Line: ' + count + ' blocks', 'ok');
+        }
+
+        function testCircle() {
+            const count = pt.circle(0, 5, 10, 5, 7, 'xz');
+            setR('t9', count > 0);
+            log('Circle: ' + count + ' blocks', 'ok');
+        }
+
+        function testSphere() {
+            const count = pt.sphere(0, 8, 20, 4, 9, false);
+            setR('t9', count > 0);
+            log('Sphere: ' + count + ' blocks', 'ok');
+        }
+
+        function testExportJSON() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            const json = ieb.exportJSON(sel, 'test');
+            const pass = json && json.includes('OpenMind-JSON');
+            setR('t10', pass);
+            log('ExportJSON: ' + (pass ? json.length + ' chars' : 'failed'), pass ? 'ok' : 'err');
+        }
+
+        function testExportOBJ() {
+            buildStructure();
+            sel.setMode('box');
+            sel.startBox(0, 0, 0);
+            sel.updateBox(4, 4, 4);
+            sel.endBox();
+            const obj = ieb.exportOBJ(sel, 'test');
+            const pass = obj && obj.includes('# OpenMind OBJ');
+            setR('t10', pass);
+            log('ExportOBJ: ' + (pass ? obj.split('\n').length + ' lines' : 'failed'), pass ? 'ok' : 'err');
+        }
+
+        function testHistory() {
+            bh.record('place', 'Place blocks');
+            buildBlock(0, 10, 0, 1);
+            bh.record('place2', 'Place block 2');
+            buildBlock(5, 10, 0, 3);
+            bh.record('place3', 'Place block 3');
+            const before = bh.currentIndex;
+            bh.undo();
+            const afterUndo = bh.currentIndex;
+            bh.redo();
+            const afterRedo = bh.currentIndex;
+            const pass = before === 2 && afterUndo === 1 && afterRedo === 2;
+            setR('t11', pass);
+            log('History: ' + before + ' → undo → ' + afterUndo + ' → redo → ' + afterRedo, pass ? 'ok' : 'err');
+        }
+
+        init();
+    </script>
+</body>
+</html>

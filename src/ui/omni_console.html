@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenMind – Omni-Console</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' fill='none' stroke='%236366f1' stroke-width='2'/></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="omni_console.css">
+</head>
+<body>
+    <div class="bg-grid"></div>
+
+    <!-- 3D VIEWPORT -->
+    <div id="viewport3d" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;"></div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingText">Initializing OpenMind Engine...</div>
+    </div>
+
+    <!-- TOP BAR -->
+    <header class="top-bar" id="topBar">
+        <div class="top-bar-left">
+            <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+            <span class="logo-text">OpenMind</span>
+            <span class="logo-version">v1.0</span>
+        </div>
+        <div class="top-bar-center">
+            <button class="topbar-btn active" data-panel="prompt" title="AI Prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>AI</span></button>
+            <button class="topbar-btn" data-panel="time" title="Time Controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Time</span></button>
+            <button class="topbar-btn" data-panel="overlays" title="Visual Overlays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg><span>Overlays</span></button>
+            <button class="topbar-btn" data-panel="agents" title="Agent Dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Agents</span></button>
+            <button class="topbar-btn" data-panel="env" title="Environment Presets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>Env</span></button>
+            <button class="topbar-btn" data-panel="forge" title="Material Forge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>Forge</span></button>
+            <button class="topbar-btn" data-panel="export" title="Export Hub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Export</span></button>
+            <button class="topbar-btn" data-panel="teleport" title="Teleport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg><span>TP</span></button>
+            <button class="topbar-btn" data-panel="brain" title="AI Brain"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/><circle cx="12" cy="12" r="10"/></svg><span>Brain</span></button>
+            <button class="topbar-btn" data-panel="interactive" title="Interactive Objects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Objects</span></button>
+            <button class="topbar-btn" data-panel="inventory" title="Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Inventory</span></button>
+            <button class="topbar-btn" data-panel="crafting" title="Crafting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>Craft</span></button>
+            <button class="topbar-btn" data-panel="settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
+            <button class="topbar-btn" data-panel="building" title="Building Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20"/><path d="M5 20V8l7-5 7 5v12"/><path d="M9 20v-4h6v4"/><path d="M9 12h.01M15 12h.01M9 16h.01M15 16h.01"/></svg><span>Build</span></button>
+        </div>
+        <div class="top-bar-right">
+            <button class="topbar-btn-small" id="tutorialBtn" title="Tutorial" aria-label="Tutorial" style="padding:4px 8px;border:1px solid var(--glass-border);border-radius:6px;background:var(--glass-bg);color:var(--text);cursor:pointer;font-size:11px">?</button>
+            <button class="topbar-btn-small" id="settingsBtn" title="Settings" aria-label="Settings" style="padding:4px 8px;border:1px solid var(--glass-border);border-radius:6px;background:var(--glass-bg);color:var(--text);cursor:pointer;font-size:11px">⚙</button>
+            <div class="status-pill" id="connectionStatus"><span class="status-dot"></span><span class="status-text">Offline</span></div>
+            <div class="topbar-btn-group">
+                <button class="topbar-btn-small" id="darkModeToggle" title="Toggle Theme">◐</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="console-main" id="consoleMain">
+
+        <!-- PANEL: AI Prompt -->
+        <section class="panel active" id="panel-prompt">
+            <div class="panel-header">
+                <h2>AI Command Console</h2>
+                <button class="panel-collapse-btn" data-target="panel-prompt">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="prompt-chat" id="promptChat">
+                    <div class="chat-message system">
+                        <div class="chat-avatar">AI</div>
+                        <div class="chat-bubble">Ready. Describe a world, ask a question, or issue a command.</div>
+                    </div>
+                </div>
+                <div class="prompt-input-area">
+                    <div class="input-wrapper">
+                        <textarea id="promptInput" placeholder="What would you like to create today?" rows="2"></textarea>
+                        <div class="input-actions">
+                            <button class="icon-btn" id="promptHistoryBtn" title="History (Up/Down)">↺</button>
+                            <button class="icon-btn send-btn" id="promptSendBtn" title="Send (Ctrl+Enter)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="prompt-suggestions" id="promptSuggestions"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Time Controls -->
+        <section class="panel" id="panel-time">
+            <div class="panel-header">
+                <h2>Time Controls</h2>
+                <button class="panel-collapse-btn" data-target="panel-time">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="time-display">
+                    <div class="big-time" id="timeDisplay">06:00:00</div>
+                    <div class="time-sub"><span id="tickCount">Tick 0</span> · <span id="dayCount">Day 1</span></div>
+                </div>
+                <div class="time-controls-row">
+                    <button class="time-btn" id="rewind5m" title="Rewind 5 minutes">⏪ 5m</button>
+                    <button class="time-btn" id="rewind1m" title="Rewind 1 minute">⏪ 1m</button>
+                    <button class="time-btn" id="rewind10s" title="Rewind 10 seconds">⏪ 10s</button>
+                    <button class="time-btn play-pause-btn" id="playPauseBtn" title="Play/Pause">▶</button>
+                    <button class="time-btn" id="ff10s" title="Fast-forward 10 seconds">10s ⏩</button>
+                    <button class="time-btn" id="ff1m" title="Fast-forward 1 minute">1m ⏩</button>
+                    <button class="time-btn" id="ff5m" title="Fast-forward 5 minutes">5m ⏩</button>
+                </div>
+                <div class="speed-slider-row">
+                    <label>Speed</label>
+                    <input type="range" id="speedSlider" min="0" max="7" value="2" step="1">
+                    <span class="speed-label" id="speedLabel">1x</span>
+                </div>
+                <div class="time-presets">
+                    <button class="preset-btn" data-time="0">Midnight</button>
+                    <button class="preset-btn" data-time="6">Sunrise</button>
+                    <button class="preset-btn" data-time="12">Noon</button>
+                    <button class="preset-btn" data-time="18">Sunset</button>
+                </div>
+                <div class="cycle-duration-row">
+                    <label>Cycle Duration</label>
+                    <input type="range" id="cycleDurationSlider" min="60" max="7200" value="600" step="60">
+                    <span id="cycleDurationLabel">10 min</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Visual Overlays -->
+        <section class="panel" id="panel-overlays">
+            <div class="panel-header">
+                <h2>Visual Overlays</h2>
+                <button class="panel-collapse-btn" data-target="panel-overlays">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="overlay-grid">
+                    <label class="toggle-card"><input type="checkbox" id="overlayStress"><div class="toggle-preview stress-preview"></div><span>Structural Stress</span></label>
+                    <label class="toggle-card"><input type="checkbox" id="overlayTemp"><div class="toggle-preview temp-preview"></div><span>Temperature</span></label>
+                    <label class="toggle-card"><input type="checkbox" id="overlayRadiation"><div class="toggle-preview rad-preview"></div><span>Radiation</span></label>
+                    <label class="toggle-card"><input type="checkbox" id="overlayThoughts"><div class="toggle-preview thoughts-preview"></div><span>Agent Thoughts</span></label>
+                    <label class="toggle-card"><input type="checkbox" id="overlayEcosystem"><div class="toggle-preview eco-preview"></div><span>Ecosystem Graph</span></label>
+                    <label class="toggle-card"><input type="checkbox" id="overlayDensity"><div class="toggle-preview density-preview"></div><span>Density Map</span></label>
+                </div>
+                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase">Visual Effects</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Particles</span><button class="toggle-btn active" id="toggleParticles">ON</button></div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Skybox</span><button class="toggle-btn active" id="toggleSkybox">ON</button></div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Water</span><button class="toggle-btn active" id="toggleWater">ON</button></div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Bloom</span><button class="toggle-btn active" id="toggleBloom">ON</button></div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Fog</span><button class="toggle-btn active" id="toggleFog">ON</button></div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Vignette</span><button class="toggle-btn" id="toggleVignette">OFF</button></div>
+                    </div>
+                </div>
+                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase">Post-Processing</div>
+                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Bloom Intensity</div>
+                    <input type="range" id="bloomIntensity" min="0" max="1" step="0.1" value="0.4" style="width:100%">
+                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Fog Density</div>
+                    <input type="range" id="fogDensity" min="0" max="1" step="0.1" value="0.3" style="width:100%">
+                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Saturation</div>
+                    <input type="range" id="saturation" min="0" max="2" step="0.1" value="1" style="width:100%">
+                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Contrast</div>
+                    <input type="range" id="contrast" min="0.5" max="2" step="0.1" value="1" style="width:100%">
+                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Temperature</div>
+                    <input type="range" id="temperature" min="-1" max="1" step="0.1" value="0" style="width:100%">
+                </div>
+                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase">Sound</div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg-alt);border-radius:4px;font-size:11px"><span>Sound</span><button class="toggle-btn active" id="toggleSound">ON</button></div>
+                    <div style="font-size:10px;color:var(--text-dim);margin:4px 0">Volume <span id="soundVolumeLabel">50%</span></div>
+                    <input type="range" id="soundVolume" min="0" max="1" step="0.05" value="0.5" style="width:100%">
+                </div>
+                <div class="overlay-legend" id="overlayLegend" style="display:none;">
+                    <div class="legend-bar" id="legendBar"></div>
+                    <div class="legend-labels"><span id="legendMin">0</span><span id="legendMax">100</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Agent Dashboard -->
+        <section class="panel" id="panel-agents">
+            <div class="panel-header">
+                <h2>Agent Dashboard</h2>
+                <button class="panel-collapse-btn" data-target="panel-agents">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="agent-list" id="agentList">
+                    <div class="agent-empty">No agents in world</div>
+                </div>
+                <div class="agent-inspector" id="agentInspector" style="display:none;">
+                    <div class="agent-inspector-header">
+                        <div class="agent-avatar" id="agentAvatar">?</div>
+                        <div class="agent-info">
+                            <div class="agent-name" id="agentName">Agent</div>
+                            <div class="agent-role" id="agentRole">Unknown</div>
+                        </div>
+                        <button class="icon-btn" id="agentCloseBtn">✕</button>
+                    </div>
+                    <div class="agent-stats-grid">
+                        <div class="agent-stat"><span class="stat-label">Health</span><div class="stat-bar"><div class="stat-bar-fill health-bar" id="agentHealth"></div></div><span class="stat-val" id="agentHealthVal">100</span></div>
+                        <div class="agent-stat"><span class="stat-label">Hunger</span><div class="stat-bar"><div class="stat-bar-fill hunger-bar" id="agentHunger"></div></div><span class="stat-val" id="agentHungerVal">0</span></div>
+                        <div class="agent-stat"><span class="stat-label">Energy</span><div class="stat-bar"><div class="stat-bar-fill energy-bar" id="agentEnergy"></div></div><span class="stat-val" id="agentEnergyVal">100</span></div>
+                        <div class="agent-stat"><span class="stat-label">Position</span><span class="stat-val" id="agentPosition">0, 0, 0</span></div>
+                    </div>
+                    <div class="agent-section">
+                        <h4>Current Goal</h4>
+                        <div class="agent-goal" id="agentGoal">None</div>
+                    </div>
+                    <div class="agent-section">
+                        <h4>Recent Memories</h4>
+                        <div class="agent-memories" id="agentMemories"></div>
+                    </div>
+                    <div class="agent-section">
+                        <h4>Thoughts</h4>
+                        <div class="agent-thoughts" id="agentThoughts"></div>
+                    </div>
+                    <div class="agent-section">
+                        <h4>Relationships</h4>
+                        <div class="agent-relationships" id="agentRelationships"></div>
+                    </div>
+                    <div class="agent-section">
+                        <h4>Inventory</h4>
+                        <div class="agent-inventory" id="agentInventory"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Environment Presets -->
+        <section class="panel" id="panel-env">
+            <div class="panel-header">
+                <h2>Environment Presets</h2>
+                <button class="panel-collapse-btn" data-target="panel-env">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="env-preset-grid">
+                    <button class="env-card active" data-preset="earth"><div class="env-icon">🌍</div><span>Earth</span></button>
+                    <button class="env-card" data-preset="moon"><div class="env-icon">🌙</div><span>Moon</span></button>
+                    <button class="env-card" data-preset="mars"><div class="env-icon">🔴</div><span>Mars</span></button>
+                    <button class="env-card" data-preset="ocean"><div class="env-icon">🌊</div><span>Ocean</span></button>
+                    <button class="env-card" data-preset="space"><div class="env-icon">🚀</div><span>Space</span></button>
+                    <button class="env-card" data-preset="custom"><div class="env-icon">⚙️</div><span>Custom</span></button>
+                </div>
+                <div class="env-sliders" id="envCustomSliders" style="display:none;">
+                    <div class="env-slider-row"><label>Gravity (m/s²)</label><input type="range" id="envGravity" min="0" max="20" value="9.81" step="0.01"><span id="envGravityVal">9.81</span></div>
+                    <div class="env-slider-row"><label>Air Density (kg/m³)</label><input type="range" id="envAirDensity" min="0" max="5" value="1.225" step="0.001"><span id="envAirDensityVal">1.225</span></div>
+                    <div class="env-slider-row"><label>Temperature (K)</label><input type="range" id="envTemp" min="0" max="600" value="293.15" step="0.1"><span id="envTempVal">293.15</span></div>
+                    <div class="env-slider-row"><label>Humidity (%)</label><input type="range" id="envHumidity" min="0" max="100" value="50" step="1"><span id="envHumidityVal">50</span></div>
+                </div>
+                <div class="env-info" id="envInfo">
+                    <div class="env-info-row"><span>Gravity:</span><span id="envInfoGravity">9.81 m/s²</span></div>
+                    <div class="env-info-row"><span>Air Density:</span><span id="envInfoAir">1.225 kg/m³</span></div>
+                    <div class="env-info-row"><span>Temperature:</span><span id="envInfoTemp">293.15 K</span></div>
+                </div>
+                <button class="action-btn" id="envApplyBtn">Apply Preset</button>
+            </div>
+        </section>
+
+        <!-- PANEL: Material Forge -->
+        <section class="panel" id="panel-forge">
+            <div class="panel-header">
+                <h2>Material Forge</h2>
+                <button class="panel-collapse-btn" data-target="panel-forge">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="forge-input-area">
+                    <textarea id="forgeInput" placeholder="Describe a material: 'A lightweight, fireproof, translucent alien glass that glows faintly blue.'" rows="3"></textarea>
+                    <button class="action-btn forge-generate-btn" id="forgeGenerateBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        Generate Material
+                    </button>
+                </div>
+                <div class="forge-loading" id="forgeLoading" style="display:none;">
+                    <div class="loading-spinner small"></div>
+                    <span>Generating material...</span>
+                </div>
+                <div class="forge-result" id="forgeResult" style="display:none;">
+                    <div class="forge-preview">
+                        <div class="material-swatch" id="materialSwatch"></div>
+                        <div class="material-props" id="materialProps"></div>
+                    </div>
+                    <button class="action-btn" id="forgeAddBtn">Add to World</button>
+                </div>
+                <div class="forge-history">
+                    <h4>Recent Materials</h4>
+                    <div class="forge-history-list" id="forgeHistory"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Export Hub -->
+        <section class="panel" id="panel-export">
+            <div class="panel-header">
+                <h2>Export Hub</h2>
+                <button class="panel-collapse-btn" data-target="panel-export">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="export-category">
+                    <h4>3D Models</h4>
+                    <div class="export-btn-row">
+                        <button class="export-btn" data-format="gltf">.GLTF</button>
+                        <button class="export-btn" data-format="fbx">.FBX</button>
+                        <button class="export-btn" data-format="obj">.OBJ</button>
+                    </div>
+                </div>
+                <div class="export-category">
+                    <h4>Architecture</h4>
+                    <div class="export-btn-row">
+                        <button class="export-btn" data-format="ifc">.IFC</button>
+                        <button class="export-btn" data-format="step">.STEP</button>
+                        <button class="export-btn" data-format="dwg">.DWG</button>
+                    </div>
+                </div>
+                <div class="export-category">
+                    <h4>Scientific Data</h4>
+                    <div class="export-btn-row">
+                        <button class="export-btn" data-format="csv">.CSV</button>
+                        <button class="export-btn" data-format="json">.JSON</button>
+                        <button class="export-btn" data-format="vtk">.VTK</button>
+                    </div>
+                </div>
+                <div class="export-category">
+                    <h4>Video</h4>
+                    <div class="export-btn-row">
+                        <button class="export-btn" data-format="mp4">.MP4</button>
+                        <button class="export-btn" data-format="mov">.MOV</button>
+                    </div>
+                </div>
+                <div class="export-category">
+                    <h4>World Data</h4>
+                    <div class="export-btn-row">
+                        <button class="export-btn" data-format="omw">.OMW (World)</button>
+                        <button class="export-btn" data-format="omm">.OMM (Materials)</button>
+                    </div>
+                </div>
+                <div class="export-progress" id="exportProgress" style="display:none;">
+                    <div class="export-progress-bar"><div class="export-progress-fill" id="exportProgressFill"></div></div>
+                    <span class="export-progress-text" id="exportProgressText">Exporting...</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Teleport & Navigation -->
+        <section class="panel" id="panel-teleport">
+            <div class="panel-header">
+                <h2>Teleport & Navigation</h2>
+                <button class="panel-collapse-btn" data-target="panel-teleport">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="teleport-inputs">
+                    <div class="coord-input"><label>X</label><input type="number" id="tpX" value="0" step="1"></div>
+                    <div class="coord-input"><label>Y</label><input type="number" id="tpY" value="5" step="1"></div>
+                    <div class="coord-input"><label>Z</label><input type="number" id="tpZ" value="0" step="1"></div>
+                    <button class="action-btn teleport-btn" id="tpGoBtn">Go</button>
+                </div>
+                <div class="teleport-bookmarks">
+                    <h4>Bookmarks</h4>
+                    <div class="bookmark-list" id="bookmarkList">
+                        <div class="bookmark-empty">No bookmarks saved</div>
+                    </div>
+                    <button class="action-btn small-btn" id="saveBookmarkBtn">+ Save Current Position</button>
+                </div>
+                <label class="toggle-row">
+                    <input type="checkbox" id="freeflyToggle">
+                    <span>Freefly Camera</span>
+                </label>
+            </div>
+        </section>
+
+        <!-- PANEL: AI Brain Switcher -->
+        <section class="panel" id="panel-brain">
+            <div class="panel-header">
+                <h2>AI Brain Switcher</h2>
+                <button class="panel-collapse-btn" data-target="panel-brain">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="brain-mode-toggle">
+                    <button class="brain-mode-btn active" id="brainCloudBtn">☁️ Cloud</button>
+                    <button class="brain-mode-btn" id="brainLocalBtn">💻 Local</button>
+                </div>
+                <div class="brain-settings" id="brainCloudSettings">
+                    <div class="brain-select-row"><label>Provider</label><select id="llmProvider"><option value="groq">Groq (Fast)</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option></select></div>
+                    <div class="brain-select-row"><label>Model</label><select id="llmModel"><option value="llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option><option value="llama-3.1-8b-instant">Llama 3.1 8B (Groq)</option><option value="mixtral-8x7b-32768">Mixtral 8x7B (Groq)</option></select></div>
+                    <div class="brain-input-row"><label>API Key</label><input type="password" id="llmApiKey" placeholder="sk-..."></div>
+                </div>
+                <div class="brain-settings" id="brainLocalSettings" style="display:none;">
+                    <div class="brain-select-row"><label>Local Provider</label><select id="localProvider"><option value="ollama">Ollama</option><option value="lmstudio">LM Studio</option></select></div>
+                    <div class="brain-select-row"><label>Model</label><select id="localModel"><option value="llama3">Llama 3</option><option value="mistral">Mistral</option><option value="codellama">Code Llama</option></select></div>
+                    <div class="brain-input-row"><label>Endpoint</label><input type="text" id="localEndpoint" value="http://localhost:11434"></div>
+                </div>
+                <div class="brain-connection-status">
+                    <span class="status-dot" id="brainStatusDot"></span>
+                    <span id="brainStatusText">Disconnected</span>
+                    <button class="action-btn small-btn" id="brainTestBtn">Test Connection</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANEL: Interactive Objects -->
+        <section class="panel" id="panel-interactive">
+            <div class="panel-header">
+                <h2>Interactive Objects</h2>
+                <button class="panel-collapse-btn" data-target="panel-interactive">−</button>
+            </div>
+            <div class="panel-body">
+                <div class="int-create-row" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
+                    <select id="intCreateType" style="flex:1;min-width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px">
+                        <option value="DOOR">Door</option><option value="BUTTON">Button</option>
+                        <option value="LEVER">Lever</option><option value="SWITCH">Switch</option>
+                        <option value="CHEST">Chest</option><option value="LAMP">Lamp</option>
+                        <option value="PISTON">Piston</option><option value="CONVEYOR">Conveyor</option>
+                        <option value="TRAPDOOR">Trapdoor</option><option value="FIRE">Fire</option>
+                        <option value="LOCK">Lock</option><option value="LAUNCHER">Launcher</option>
+                        <option value="SENSOR">Sensor</option><option value="TIMER">Timer</option>
+                        <option value="COMPUTER">Computer</option>
+                    </select>
+                    <input type="number" id="intCreateX" value="0" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px" placeholder="X">
+                    <input type="number" id="intCreateY" value="2" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px" placeholder="Y">
+                    <input type="number" id="intCreateZ" value="0" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px" placeholder="Z">
+                    <button class="action-btn" id="intCreateBtn" style="padding:4px 10px">Create</button>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <span style="font-size:11px;color:var(--text-dim)">Objects in world</span>
+                    <button class="icon-btn" id="intListRefresh" title="Refresh">↻</button>
+                </div>
+                <div id="intObjectList" style="max-height:250px;overflow-y:auto"></div>
+            </div>
+        </section>
+
+        <!-- PANEL: Inventory -->
+        <section class="panel" id="panel-inventory">
+            <div class="panel-header">
+                <h2>Inventory</h2>
+                <button class="panel-collapse-btn" data-target="panel-inventory">−</button>
+            </div>
+            <div class="panel-body">
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Player Inventory (36 slots) — Click to select</div>
+                <div id="invGrid" style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px"></div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Drag items between slots. Use keys 1-9 for hotbar.</div>
+            </div>
+        </section>
+
+        <!-- PANEL: Crafting -->
+        <section class="panel" id="panel-crafting">
+            <div class="panel-header">
+                <h2>Crafting</h2>
+                <button class="panel-collapse-btn" data-target="panel-crafting">−</button>
+            </div>
+            <div class="panel-body">
+                <div style="display:flex;gap:4px;margin-bottom:8px">
+                    <input type="text" id="craftAiPrompt" placeholder="Describe material to generate..." style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px">
+                    <button class="action-btn" id="craftAiBtn" style="padding:4px 8px;font-size:10px">AI Generate</button>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <span style="font-size:11px;color:var(--text-dim)">Recipes</span>
+                    <button class="icon-btn" id="craftRefreshBtn" title="Refresh">↻</button>
+                </div>
+                <div id="craftRecipeList" style="max-height:300px;overflow-y:auto"></div>
+            </div>
+        </section>
+
+        <!-- PANEL: Building Tools -->
+        <section class="panel" id="panel-building">
+            <div class="panel-header">
+                <h2>Building Tools</h2>
+                <button class="panel-collapse-btn" data-target="panel-building">−</button>
+            </div>
+            <div class="panel-body" style="max-height:70vh;overflow-y:auto">
+                <div style="margin-bottom:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Selection</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                        <button class="action-btn" id="selBoxBtn" style="padding:4px 8px;font-size:10px">Box</button>
+                        <button class="action-btn" id="selBrushBtn" style="padding:4px 8px;font-size:10px">Brush</button>
+                        <button class="action-btn" id="selPaintBtn" style="padding:4px 8px;font-size:10px">Paint</button>
+                        <button class="action-btn" id="selClearBtn" style="padding:4px 8px;font-size:10px">Clear</button>
+                    </div>
+                </div>
+                <div style="margin-bottom:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Copy/Paste</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                        <button class="action-btn" id="copyBtn" style="padding:4px 8px;font-size:10px">Copy</button>
+                        <button class="action-btn" id="pasteBtn" style="padding:4px 8px;font-size:10px">Paste</button>
+                        <button class="action-btn" id="rotateBtn" style="padding:4px 8px;font-size:10px">Rotate</button>
+                        <button class="action-btn" id="flipXBtn" style="padding:4px 8px;font-size:10px">FlipX</button>
+                        <button class="action-btn" id="flipYBtn" style="padding:4px 8px;font-size:10px">FlipY</button>
+                        <button class="action-btn" id="flipZBtn" style="padding:4px 8px;font-size:10px">FlipZ</button>
+                    </div>
+                </div>
+                <div style="margin-bottom:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Symmetry</div>
+                    <div style="display:flex;gap:4px">
+                        <button class="action-btn" id="symXBtn" style="padding:4px 8px;font-size:10px">X</button>
+                        <button class="action-btn" id="symYBtn" style="padding:4px 8px;font-size:10px">Y</button>
+                        <button class="action-btn" id="symZBtn" style="padding:4px 8px;font-size:10px">Z</button>
+                    </div>
+                </div>
+                <div style="margin-bottom:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Fill & Patterns</div>
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+                        <select id="fillType" style="padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px"><option value="1">Stone</option><option value="2">Dirt</option><option value="3">Grass</option><option value="7">Wood</option><option value="9">Iron</option><option value="13">Diamond</option></select>
+                        <select id="fillPattern" style="padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px"><option value="solid">Solid</option><option value="checkerboard">Checker</option><option value="stripes">Stripes</option><option value="random">Random</option><option value="gradient_height">Gradient H</option></select>
+                        <button class="action-btn" id="fillBtn" style="padding:4px 8px;font-size:10px">Fill</button>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                        <button class="action-btn" id="lineBtn" style="padding:4px 8px;font-size:10px">Line</button>
+                        <button class="action-btn" id="circleBtn" style="padding:4px 8px;font-size:10px">Circle</button>
+                        <button class="action-btn" id="sphereBtn" style="padding:4px 8px;font-size:10px">Sphere</button>
+                    </div>
+                </div>
+                <div style="margin-bottom:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Blueprints</div>
+                    <div style="display:flex;gap:4px;margin-bottom:4px">
+                        <input type="text" id="bpName" placeholder="Name" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:10px">
+                        <button class="action-btn" id="bpSaveBtn" style="padding:4px 8px;font-size:10px">Save</button>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+                        <button class="action-btn" id="bpExportBtn" style="padding:4px 8px;font-size:10px">Export .BP</button>
+                        <button class="action-btn" id="bpImportBtn" style="padding:4px 8px;font-size:10px">Import .BP</button>
+                    </div>
+                    <div id="bpList" style="max-height:120px;overflow-y:auto"></div>
+                </div>
+                <div style="margin-bottom:8px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Export</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                        <button class="action-btn" id="exportJSONBtn" style="padding:4px 8px;font-size:10px">JSON</button>
+                        <button class="action-btn" id="exportOBJBtn" style="padding:4px 8px;font-size:10px">OBJ</button>
+                        <button class="action-btn" id="exportGLTFBtn" style="padding:4px 8px;font-size:10px">GLTF</button>
+                    </div>
+                </div>
+                <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:11px;color:var(--text-dim);text-transform:uppercase">History</span><div style="display:flex;gap:4px"><button class="action-btn" id="historyUndoBtn" style="padding:2px 6px;font-size:10px">Undo</button><button class="action-btn" id="historyRedoBtn" style="padding:2px 6px;font-size:10px">Redo</button><button class="icon-btn" id="historyRefreshBtn">↻</button></div></div>
+                    <div id="historyList" style="max-height:120px;overflow-y:auto"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" id="panel-settings">
+            <div class="panel-header">
+                <h2>Settings</h2>
+                <button class="panel-collapse-btn" data-target="panel-settings">−</button>
+            </div>
+            <div class="panel-body">
+                <div id="panelSettings"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FLOATING STATS OVERLAY -->
+    <div class="stats-overlay" id="statsOverlay">
+        <div class="stats-title">World Stats</div>
+        <div class="stats-row"><span class="stats-label">Blocks</span><span class="stats-value highlight" id="statBlocks">0</span></div>
+        <div class="stats-row"><span class="stats-label">Tick</span><span class="stats-value" id="statTick">0</span></div>
+        <div class="stats-row"><span class="stats-label">FPS</span><span class="stats-value highlight" id="statFPS">0</span></div>
+        <div class="stats-row"><span class="stats-label">Temperature</span><span class="stats-value" id="statTemp">293.15 K</span></div>
+        <div class="stats-row"><span class="stats-label">Weather</span><span class="stats-value" id="statWeather">CLEAR</span></div>
+        <div class="stats-row"><span class="stats-label">Time of Day</span><span class="stats-value" id="statTimeOfDay">06:00</span></div>
+        <div class="stats-row"><span class="stats-label">Agents</span><span class="stats-value" id="statEntities">0</span></div>
+    </div>
+
+    <!-- FLOATING CONSOLE LOG -->
+    <div class="console-log" id="consoleLog">
+        <div class="console-log-header"><span>Console</span><button class="icon-btn" id="clearLogBtn">✕</button></div>
+        <div class="console-log-body" id="consoleLogBody">
+            <div class="console-line"><span class="time">[init]</span><span class="msg">Engine ready.</span></div>
+        </div>
+    </div>
+
+    <!-- Ecosystem Graph Overlay -->
+    <div class="eco-graph-overlay" id="ecoGraphOverlay" style="display:none;">
+        <div class="eco-graph-header"><span>Population</span><button class="icon-btn" id="ecoGraphClose">✕</button></div>
+        <canvas id="ecoGraphCanvas" width="300" height="150"></canvas>
+    </div>
+
+    <script src="ui_connection.js"></script>
+    <script src="world_io.js"></script>
+    <script src="stats.js"></script>
+    <script src="state_machine.js"></script>
+    <script src="interactive_objects.js"></script>
+    <script src="inventory_system.js"></script>
+    <script src="crafting_system.js"></script>
+    <script src="particle_system.js"></script>
+    <script src="physics_visuals.js"></script>
+    <script src="sound_system.js"></script>
+    <script src="ui_animations.js"></script>
+    <script src="error_handler.js"></script>
+    <script src="loading_screen.js"></script>
+    <script src="tutorial.js"></script>
+    <script src="undo_redo.js"></script>
+    <script src="shortcuts.js"></script>
+    <script src="notifications.js"></script>
+    <script src="settings_panel.js"></script>
+    <script src="selection.js"></script>
+    <script src="copy_paste.js"></script>
+    <script src="blueprints.js"></script>
+    <script src="symmetry.js"></script>
+    <script src="pattern_tools.js"></script>
+    <script src="import_export_building.js"></script>
+    <script src="building_history.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="voxel_renderer.js"></script>
+    <script src="water_renderer.js"></script>
+    <script src="skybox.js"></script>
+    <script src="post_processing.js"></script>
+    <script src="llm_client.js"></script>
+    <script src="network.js"></script>
+    <script src="permissions.js"></script>
+    <script src="player_entities.js"></script>
+    <script src="client.js"></script>
+    <script src="host.js"></script>
+    <script src="multiplayer_ui.js"></script>
+    <script src="chat.js"></script>
+    <script src="touch_controls.js"></script>
+    <script src="openmind.js"></script>
+    <script src="omni_console.js"></script>
+</body>
+</html>

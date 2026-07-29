@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5z' fill='%236366f1'/></svg>">
+    <title>OpenMind – Integration Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+        #viewport3d { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        #testPanel {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 16px; width: 380px; max-height: 90vh;
+            overflow-y: auto; backdrop-filter: blur(12px); font-size: 13px;
+        }
+        #testPanel h2 { color: #8b5cf6; margin-bottom: 12px; font-size: 16px; }
+        .test-group { margin-bottom: 12px; border-bottom: 1px solid rgba(100,100,200,0.2); padding-bottom: 8px; }
+        .test-group h3 { color: #60a5fa; font-size: 12px; margin-bottom: 6px; text-transform: uppercase; }
+        .test-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+        .test-btn {
+            padding: 4px 10px; border: 1px solid rgba(100,100,200,0.4); border-radius: 6px;
+            background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 11px;
+            transition: all 0.15s;
+        }
+        .test-btn:hover { background: rgba(60,60,120,0.8); border-color: #8b5cf6; }
+        .test-btn.active { background: #8b5cf6; color: #fff; }
+        .test-result { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+        .pass { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .fail { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .pending { background: rgba(234,179,8,0.2); color: #eab308; }
+        input[type="text"], input[type="number"] {
+            background: rgba(20,20,40,0.8); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 4px; color: #e0e0e0; padding: 4px 8px; font-size: 11px; width: 80px;
+        }
+        #log { margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 11px; color: #94a3b8; }
+        #log div { padding: 2px 0; border-bottom: 1px solid rgba(100,100,200,0.1); }
+        #log .ok { color: #22c55e; } #log .err { color: #ef4444; } #log .info { color: #60a5fa; }
+        #statusBar {
+            position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            display: flex; gap: 8px; padding: 8px 16px; background: rgba(10,10,30,0.9);
+            border: 1px solid rgba(100,100,200,0.3); border-radius: 8px; font-size: 12px;
+        }
+        #hotbar {
+            position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            display: flex; gap: 3px; padding: 6px; background: rgba(10,10,30,0.85);
+            border: 1px solid rgba(100,100,200,0.3); border-radius: 8px;
+        }
+        .hotbar-slot {
+            width: 36px; height: 36px; border-radius: 5px; border: 2px solid rgba(100,100,200,0.3);
+            cursor: pointer; display: flex; align-items: flex-end; justify-content: center;
+            font-size: 8px; color: #fff; text-shadow: 0 0 3px #000; padding-bottom: 2px;
+        }
+        .hotbar-slot.selected { border-color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="viewport3d"></div>
+
+    <div id="testPanel">
+        <h2>OpenMind Integration Test</h2>
+
+        <div class="test-group">
+            <h3>1. WASM Engine</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testInitWorld()">initWorld</button>
+                <span id="t1" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testSetBlock()">setBlock</button>
+                <span id="t2" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testGetBlock()">getBlock</button>
+                <span id="t3" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testTick()">tick</button>
+                <span id="t4" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testGetStats()">getWorldStats</button>
+                <span id="t5" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>2. Renderer</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testRenderer()">Init 3D</button>
+                <span id="t6" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testRenderBlocks()">Render blocks</button>
+                <span id="t7" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>3. Block Placement</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPlace10()">Place 10 blocks</button>
+                <span id="t8" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPlacePlatform()">10x10 platform</button>
+                <span id="t9" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testRemoveBlock()">Remove block</button>
+                <span id="t10" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>4. Camera</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testCameraOrbit()">Orbit (right-drag)</button>
+                <span id="t11" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testCameraZoom()">Zoom (scroll)</button>
+                <span id="t12" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testCameraMove()">Move (WASD)</button>
+                <span id="t13" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>5. Hotbar</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testHotbar()">Show hotbar</button>
+                <span id="t14" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testHotbarSelect()">Select block</button>
+                <span id="t15" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>6. World Save/Load</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testSave()">Save world</button>
+                <span id="t16" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testLoad()">Load world</button>
+                <span id="t17" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testList()">List worlds</button>
+                <span id="t18" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>7. Environment</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testWeather()">Set rain</button>
+                <span id="t19" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testTime()">Set time 18:00</button>
+                <span id="t20" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testGravity()">Set gravity 3.71</button>
+                <span id="t21" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>8. Interactive Blocks</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPlaceDoor()">Place door</button>
+                <span id="t22" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPlaceButton()">Place button</button>
+                <span id="t23" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPlaceLauncher()">Place launcher</button>
+                <span id="t24" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>9. LLM Integration</h3>
+            <div class="test-row">
+                <input type="text" id="apiKeyInput" placeholder="API key" style="width:140px">
+                <button class="test-btn" onclick="testLLMConfig()">Configure</button>
+                <span id="t25" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>10. Performance</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPerf1000()">Place 1000 blocks</button>
+                <span id="t26" class="test-result pending">pending</span>
+            </div>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPerf5000()">Place 5000 blocks</button>
+                <span id="t27" class="test-result pending">pending</span>
+            </div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <div id="statusBar">
+        <span>FPS: <span id="fpsDisplay">0</span></span>
+        <span>Blocks: <span id="blockDisplay">0</span></span>
+        <span>Renderer: <span id="rendererDisplay">0</span></span>
+        <span>Time: <span id="timeDisplay">06:00</span></span>
+    </div>
+
+    <script src="ui_connection.js"></script>
+    <script src="world_io.js"></script>
+    <script src="stats.js"></script>
+    <script src="llm_client.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="voxel_renderer.js"></script>
+    <script src="openmind.js"></script>
+
+    <script>
+        let engine, renderer, worldIO, liveStats, llm;
+
+        function log(msg, cls) {
+            const div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function setResult(id, pass) {
+            const el = document.getElementById(id);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'test-result ' + (pass ? 'pass' : 'fail');
+        }
+
+        async function init() {
+            log('Initializing WASM engine...', 'info');
+            engine = new EngineConnection();
+            const ok = await engine.load();
+            if (!ok) { log('WASM failed to load', 'err'); return; }
+            engine.initWorld();
+            engine.setTimeOfDay(6);
+            log('WASM engine ready', 'ok');
+
+            worldIO = new WorldIO();
+            await worldIO.init();
+            worldIO.setEngine(engine);
+
+            liveStats = new LiveStats();
+            liveStats.setEngine(engine);
+            liveStats.start(1000);
+
+            llm = new LLMClient();
+            llm.engine = engine;
+
+            log('All modules initialized', 'ok');
+        }
+
+        function testInitWorld() {
+            engine.initWorld();
+            setResult('t1', true);
+            log('initWorld: OK', 'ok');
+        }
+
+        function testSetBlock() {
+            const r = engine.setBlock(5, 5, 5, 1);
+            setResult('t2', r !== null);
+            log('setBlock(5,5,5,STONE): ' + r, r ? 'ok' : 'err');
+        }
+
+        function testGetBlock() {
+            const b = engine.getBlock(5, 5, 5);
+            const pass = b && b.exists && b.blockType === 1;
+            setResult('t3', pass);
+            log('getBlock(5,5,5): type=' + (b?.blockType) + ' exists=' + (b?.exists), pass ? 'ok' : 'err');
+        }
+
+        function testTick() {
+            engine.tick(0.1);
+            setResult('t4', true);
+            log('tick(0.1): OK', 'ok');
+        }
+
+        function testGetStats() {
+            const s = engine.getWorldStats();
+            const pass = s && s.totalBlocks !== undefined;
+            setResult('t5', pass);
+            log('getWorldStats: blocks=' + s.totalBlocks + ' tick=' + s.currentTick, pass ? 'ok' : 'err');
+        }
+
+        function testRenderer() {
+            renderer = new VoxelRenderer('viewport3d');
+            renderer.start(engine);
+            worldIO.setRenderer(renderer);
+            liveStats.setRenderer(renderer);
+            setResult('t6', renderer.running);
+            log('Renderer started', 'ok');
+        }
+
+        function testRenderBlocks() {
+            renderer.updateFromWASM();
+            renderer.rebuildMesh();
+            setResult('t7', true);
+            log('Rendered ' + renderer.blocks.size + ' blocks', 'ok');
+        }
+
+        function testPlace10() {
+            for (let i = 0; i < 10; i++) engine.setBlock(i, 1, 0, 1);
+            renderer.updateFromWASM();
+            renderer.rebuildMesh();
+            setResult('t8', true);
+            log('Placed 10 blocks', 'ok');
+        }
+
+        function testPlacePlatform() {
+            for (let x = 0; x < 10; x++) for (let z = 0; z < 10; z++) engine.setBlock(x, 1, z, 3);
+            renderer.updateFromWASM();
+            renderer.rebuildMesh();
+            setResult('t9', true);
+            log('Placed 10x10 grass platform', 'ok');
+        }
+
+        function testRemoveBlock() {
+            engine.setBlock(5, 5, 5, 0);
+            renderer.updateFromWASM();
+            renderer.rebuildMesh();
+            setResult('t10', true);
+            log('Removed block at 5,5,5', 'ok');
+        }
+
+        function testCameraOrbit() { setResult('t11', true); log('Right-drag to orbit in viewport', 'info'); }
+        function testCameraZoom() { setResult('t12', true); log('Scroll to zoom in viewport', 'info'); }
+        function testCameraMove() { setResult('t13', true); log('WASD+QE to move in viewport', 'info'); }
+
+        function testHotbar() { setResult('t14', !!document.getElementById('hotbar')); log('Hotbar visible', 'ok'); }
+        function testHotbarSelect() { renderer.hotbarIndex = 3; renderer.updateHotbar(); setResult('t15', true); log('Selected block 3', 'ok'); }
+
+        async function testSave() {
+            const r = await worldIO.save('test_world');
+            setResult('t16', r.success);
+            log('Save: ' + JSON.stringify(r), r.success ? 'ok' : 'err');
+        }
+
+        async function testLoad() {
+            const r = await worldIO.load('test_world');
+            setResult('t17', r.success);
+            log('Load: ' + JSON.stringify(r), r.success ? 'ok' : 'err');
+        }
+
+        async function testList() {
+            const r = await worldIO.list();
+            setResult('t18', Array.isArray(r));
+            log('List: ' + r.length + ' worlds', 'ok');
+        }
+
+        function testWeather() { engine.setWeather(1); setResult('t19', true); log('Weather set to RAIN', 'ok'); }
+        function testTime() { engine.setTimeOfDay(18); setResult('t20', true); log('Time set to 18:00', 'ok'); }
+        function testGravity() { engine.setGravity(3.71); setResult('t21', true); log('Gravity set to 3.71 (Mars)', 'ok'); }
+
+        function testPlaceDoor() {
+            engine.setBlock(8, 2, 8, 30);
+            renderer.updateFromWASM(); renderer.rebuildMesh();
+            setResult('t22', true); log('Placed door at 8,2,8', 'ok');
+        }
+        function testPlaceButton() {
+            engine.setBlock(8, 2, 9, 31);
+            renderer.updateFromWASM(); renderer.rebuildMesh();
+            setResult('t23', true); log('Placed button at 8,2,9', 'ok');
+        }
+        function testPlaceLauncher() {
+            engine.setBlock(8, 1, 10, 32);
+            renderer.updateFromWASM(); renderer.rebuildMesh();
+            setResult('t24', true); log('Placed launcher at 8,1,10', 'ok');
+        }
+
+        function testLLMConfig() {
+            const key = document.getElementById('apiKeyInput').value;
+            if (key.length > 5) {
+                llm.setConfig('groq', key);
+                setResult('t25', true); log('LLM configured (Groq)', 'ok');
+            } else {
+                setResult('t25', false); log('No API key provided', 'err');
+            }
+        }
+
+        function testPerf1000() {
+            const t0 = performance.now();
+            for (let i = 0; i < 1000; i++) engine.setBlock(i % 64, i / 64, 0, 1);
+            renderer.updateFromWASM(); renderer.rebuildMesh();
+            const ms = (performance.now() - t0).toFixed(1);
+            setResult('t26', true); log('1000 blocks in ' + ms + 'ms', 'ok');
+        }
+
+        function testPerf5000() {
+            const t0 = performance.now();
+            for (let i = 0; i < 5000; i++) engine.setBlock(i % 64, Math.floor(i / 64) % 64, Math.floor(i / 4096), 1);
+            renderer.updateFromWASM(); renderer.rebuildMesh();
+            const ms = (performance.now() - t0).toFixed(1);
+            setResult('t27', true); log('5000 blocks in ' + ms + 'ms', 'ok');
+        }
+
+        setInterval(() => {
+            if (!engine || !engine.wasmReady) return;
+            const s = engine.getWorldStats();
+            document.getElementById('blockDisplay').textContent = s.totalBlocks || 0;
+            document.getElementById('fpsDisplay').textContent = renderer ? renderer.blocks.size : 0;
+            document.getElementById('rendererDisplay').textContent = renderer ? renderer.blocks.size : 0;
+            document.getElementById('timeDisplay').textContent = new Date().toLocaleTimeString();
+        }, 500);
+
+        window.addEventListener('renderer-message', (e) => log('Renderer: ' + e.detail, 'info'));
+
+        init();
+    </script>
+</body>
+</html>

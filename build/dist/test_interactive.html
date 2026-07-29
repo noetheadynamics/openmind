@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5z' fill='%236366f1'/></svg>">
+    <title>OpenMind – Interactive Objects Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+        #viewport3d { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        #testPanel {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 16px; width: 420px; max-height: 90vh;
+            overflow-y: auto; backdrop-filter: blur(12px); font-size: 13px;
+        }
+        #testPanel h2 { color: #8b5cf6; margin-bottom: 12px; font-size: 16px; }
+        .test-group { margin-bottom: 10px; border-bottom: 1px solid rgba(100,100,200,0.2); padding-bottom: 8px; }
+        .test-group h3 { color: #60a5fa; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; }
+        .test-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+        .test-btn {
+            padding: 3px 8px; border: 1px solid rgba(100,100,200,0.4); border-radius: 6px;
+            background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 10px;
+        }
+        .test-btn:hover { background: rgba(60,60,120,0.8); border-color: #8b5cf6; }
+        .r { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+        .pass { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .fail { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .pending { background: rgba(234,179,8,0.2); color: #eab308; }
+        #log { margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 10px; color: #94a3b8; }
+        #log div { padding: 2px 0; border-bottom: 1px solid rgba(100,100,200,0.1); }
+        #log .ok { color: #22c55e; } #log .err { color: #ef4444; } #log .info { color: #60a5fa; }
+        #invPanel {
+            position: fixed; top: 10px; right: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 12px; width: 320px; font-size: 12px;
+        }
+        #invPanel h3 { color: #8b5cf6; margin-bottom: 8px; font-size: 14px; }
+        #invGrid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; margin-bottom: 8px; }
+        .inv-slot {
+            width: 30px; height: 30px; border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 4px; background: rgba(20,20,40,0.8); display: flex;
+            align-items: flex-end; justify-content: center; font-size: 8px; cursor: pointer;
+            position: relative;
+        }
+        .inv-slot.selected { border-color: #fff; }
+        #craftPanel {
+            position: fixed; bottom: 10px; right: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 12px; width: 320px; font-size: 12px; max-height: 300px; overflow-y: auto;
+        }
+        #craftPanel h3 { color: #8b5cf6; margin-bottom: 8px; font-size: 14px; }
+        .recipe-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; background: rgba(30,30,60,0.5); border-radius: 4px; margin: 2px 0; font-size: 11px; }
+        .recipe-btn { padding: 2px 8px; border: 1px solid #22c55e; border-radius: 4px; background: rgba(34,197,94,0.2); color: #22c55e; cursor: pointer; font-size: 10px; }
+        .recipe-btn:disabled { border-color: rgba(100,100,200,0.3); background: rgba(20,20,40,0.5); color: rgba(100,100,200,0.5); cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div id="viewport3d"></div>
+
+    <div id="testPanel">
+        <h2>Interactive Objects Test</h2>
+
+        <div class="test-group">
+            <h3>1. Door (open/close/lock)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testDoor()">Create + Interact</button>
+                <span id="t1" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>2. Button (press → signal)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testButton()">Create + Press</button>
+                <span id="t2" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>3. Lever (toggle up/down)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testLever()">Create + Toggle</button>
+                <span id="t3" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>4. Switch (on/off)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testSwitch()">Create + Toggle</button>
+                <span id="t4" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>5. Chest (open/close)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testChest()">Create + Open</button>
+                <span id="t5" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>6. Lamp (on/off)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testLamp()">Create + Toggle</button>
+                <span id="t6" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>7. Piston (extend/retract)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPiston()">Create + Extend</button>
+                <span id="t7" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>8. Conveyor (on/off)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testConveyor()">Create + Toggle</button>
+                <span id="t8" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>9. Trapdoor (open/close)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testTrapdoor()">Create + Toggle</button>
+                <span id="t9" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>10. Fire (extinguish/light)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testFire()">Create + Toggle</button>
+                <span id="t10" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>11. Lock (key unlock)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testLock()">Create + Unlock</button>
+                <span id="t11" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>12. Launcher (activate)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testLauncher()">Create + Launch</button>
+                <span id="t12" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>13. Sensor (detect)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testSensor()">Create + Detect</button>
+                <span id="t13" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>14. Timer (start/stop)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testTimer()">Create + Start</button>
+                <span id="t14" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>15. Computer (power on/off)</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testComputer()">Create + Power</button>
+                <span id="t15" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>16. State Machine</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testStateMachine()">Test transitions</button>
+                <span id="t16" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>17. Signal Propagation</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testSignal()">Button → Door</button>
+                <span id="t17" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>18. Inventory</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testInventory()">Add/Remove items</button>
+                <span id="t18" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>19. Crafting</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testCrafting()">Craft door</button>
+                <span id="t19" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="test-group">
+            <h3>20. Persistence</h3>
+            <div class="test-row">
+                <button class="test-btn" onclick="testPersistence()">Save/Load states</button>
+                <span id="t20" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <div id="invPanel">
+        <h3>Inventory</h3>
+        <div id="invGrid"></div>
+        <div id="invInfo" style="font-size:10px;color:#94a3b8">Click items to add. Slots: <span id="invCount">0</span>/36</div>
+    </div>
+
+    <div id="craftPanel">
+        <h3>Crafting Recipes</h3>
+        <div id="craftList"></div>
+    </div>
+
+    <script src="ui_connection.js"></script>
+    <script src="world_io.js"></script>
+    <script src="stats.js"></script>
+    <script src="state_machine.js"></script>
+    <script src="interactive_objects.js"></script>
+    <script src="inventory_system.js"></script>
+    <script src="crafting_system.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="voxel_renderer.js"></script>
+    <script src="llm_client.js"></script>
+
+    <script>
+        let engine, ios, inv, craft, renderer;
+        const results = {};
+
+        function log(msg, cls) {
+            const div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function setR(id, pass) {
+            results[id] = pass;
+            const el = document.getElementById(id);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'r ' + (pass ? 'pass' : 'fail');
+        }
+
+        async function init() {
+            log('Loading WASM...', 'info');
+            engine = new EngineConnection();
+            const ok = await engine.load();
+            if (!ok) { log('WASM failed', 'err'); return; }
+            engine.initWorld();
+            engine.setTimeOfDay(12);
+            log('WASM ready', 'ok');
+
+            ios = new InteractiveObjectSystem();
+            ios.setEngine(engine);
+            inv = new InventorySystem();
+            inv.setEngine(engine);
+            ios.setInventory(inv);
+            craft = new CraftingSystem();
+            craft.setInventory(inv);
+
+            renderer = new VoxelRenderer('viewport3d');
+            renderer.start(engine);
+            ios.setRenderer(renderer);
+
+            // Add starter items
+            inv.player.addItem('wood', 64);
+            inv.player.addItem('iron', 32);
+            inv.player.addItem('stone', 32);
+            inv.player.addItem('copper', 16);
+            inv.player.addItem('gold', 8);
+            inv.player.addItem('diamond', 4);
+            inv.player.addItem('coal', 16);
+            inv.player.addItem('key_DOOR', 1);
+
+            renderInvUI();
+            renderCraftUI();
+            inv.player.on(() => renderInvUI());
+            log('All modules ready', 'ok');
+        }
+
+        function renderInvUI() {
+            const grid = document.getElementById('invGrid');
+            grid.innerHTML = '';
+            for (let i = 0; i < inv.player.size; i++) {
+                const slot = inv.player.getSlot(i);
+                const div = document.createElement('div');
+                div.className = 'inv-slot' + (i === inv.player.selectedSlot ? ' selected' : '');
+                if (!slot.isEmpty) {
+                    const def = ItemDefs[slot.itemId];
+                    div.innerHTML = `<span style="font-size:14px">${def?.icon || '?'}</span><span style="position:absolute;bottom:1px;right:2px;font-size:7px;color:#94a3b8">${slot.count}</span>`;
+                }
+                div.addEventListener('click', () => { inv.player.selectSlot(i); renderInvUI(); });
+                grid.appendChild(div);
+            }
+            document.getElementById('invCount').textContent = inv.player.slots.filter(s => !s.isEmpty).length;
+        }
+
+        function renderCraftUI() {
+            const list = document.getElementById('craftList');
+            list.innerHTML = '';
+            const recipes = craft.getAvailableRecipes();
+            for (const r of recipes) {
+                const div = document.createElement('div');
+                div.className = 'recipe-row';
+                const ings = r.ingredients.map(i => `${i.item} ${i.has}/${i.count}`).join(', ');
+                div.innerHTML = `<span>${r.name} x${r.count} (${ings})</span><button class="recipe-btn" ${r.canCraft ? '' : 'disabled'} onclick="doCraft('${r.id}')">Craft</button>`;
+                list.appendChild(div);
+            }
+        }
+
+        function doCraft(id) {
+            const result = craft.craft(id);
+            if (result) { log('Crafted ' + result.recipe.name, 'ok'); renderCraftUI(); renderInvUI(); }
+        }
+
+        // Test functions
+        function testDoor() {
+            const o = ios.create('DOOR', 0, 2, 0);
+            const r1 = ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            const r2 = ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            const pass = s1 === 'DOOR_OPENING' || s1 === 'DOOR_OPEN';
+            setR('t1', pass);
+            log('Door: ' + s1 + ' → ' + s2, pass ? 'ok' : 'err');
+        }
+
+        function testButton() {
+            const o = ios.create('BUTTON', 3, 2, 0);
+            ios.interact(o.id);
+            const state = ios.sm.get(o.id).state;
+            const signals = ios.signals.length;
+            setR('t2', state === 'BUTTON_PRESSED' || signals > 0);
+            log('Button: state=' + state + ' signals=' + signals, 'ok');
+        }
+
+        function testLever() {
+            const o = ios.create('LEVER', 6, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t3', s1 !== s2);
+            log('Lever: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testSwitch() {
+            const o = ios.create('SWITCH', 9, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t4', s1 === 'SWITCH_ON' && s2 === 'SWITCH_OFF');
+            log('Switch: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testChest() {
+            const o = ios.create('CHEST', 12, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t5', s1 === 'CHEST_OPEN' && s2 === 'CHEST_CLOSED');
+            log('Chest: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testLamp() {
+            const o = ios.create('LAMP', 15, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t6', s1 === 'LAMP_ON' && s2 === 'LAMP_OFF');
+            log('Lamp: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testPiston() {
+            const o = ios.create('PISTON', 18, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            setR('t7', s1 === 'PISTON_EXTENDING' || s1 === 'PISTON_EXTENDED');
+            log('Piston: ' + s1, 'ok');
+        }
+
+        function testConveyor() {
+            const o = ios.create('CONVEYOR', 21, 1, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t8', s1 !== s2);
+            log('Conveyor: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testTrapdoor() {
+            const o = ios.create('TRAPDOOR', 24, 1, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t9', s1 !== s2);
+            log('Trapdoor: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testFire() {
+            const o = ios.create('FIRE', 27, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            ios.interact(o.id);
+            const s2 = ios.sm.get(o.id).state;
+            setR('t10', s1 !== s2);
+            log('Fire: ' + s1 + ' → ' + s2, 'ok');
+        }
+
+        function testLock() {
+            const o = ios.create('LOCK', 30, 2, 0);
+            inv.player.addItem('key_DOOR', 1);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            setR('t11', s1 === 'LOCK_UNLOCKED');
+            log('Lock: ' + s1, 'ok');
+        }
+
+        function testLauncher() {
+            const o = ios.create('LAUNCHER', 33, 1, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            setR('t12', s1 === 'LAUNCHER_CHARGING');
+            log('Launcher: ' + s1, 'ok');
+        }
+
+        function testSensor() {
+            const o = ios.create('SENSOR', 36, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            setR('t13', s1 === 'SENSOR_TRIGGERED');
+            log('Sensor: ' + s1, 'ok');
+        }
+
+        function testTimer() {
+            const o = ios.create('TIMER', 39, 2, 0, { duration: 2 });
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            setR('t14', s1 === 'TIMER_RUNNING');
+            log('Timer: ' + s1, 'ok');
+        }
+
+        function testComputer() {
+            const o = ios.create('COMPUTER', 42, 2, 0);
+            ios.interact(o.id);
+            const s1 = ios.sm.get(o.id).state;
+            setR('t15', s1 === 'COMPUTER_BOOTING' || s1 === 'COMPUTER_ON');
+            log('Computer: ' + s1, 'ok');
+        }
+
+        function testStateMachine() {
+            const sm = new StateMachine();
+            sm.register('d1', 'DOOR', 'DOOR_CLOSED');
+            sm.register('b1', 'BUTTON', 'BUTTON_IDLE');
+            const r1 = sm.transition('d1', 'on');
+            const r2 = sm.transition('b1', 'press');
+            const s1 = sm.get('d1').state;
+            const s2 = sm.get('b1').state;
+            sm.addCondition('b1', 'd1', 'BUTTON_PRESSED', 'on');
+            sm.transition('b1', 'press');
+            const s3 = sm.get('d1').state;
+            setR('t16', r1 && r2 && s1 === 'DOOR_OPENING' && s3 !== s1);
+            log('StateMachine: door=' + s1 + ' button=' + s2 + ' after signal door=' + s3, 'ok');
+        }
+
+        function testSignal() {
+            const d = ios.create('DOOR', 50, 2, 0);
+            const b = ios.create('BUTTON', 50, 2, 3);
+            ios.link(b.id, d.id);
+            ios.interact(b.id);
+            setTimeout(() => {
+                const doorState = ios.sm.get(d.id).state;
+                const pass = doorState !== 'DOOR_CLOSED';
+                setR('t17', pass);
+                log('Signal: button→door door=' + doorState, pass ? 'ok' : 'err');
+            }, 500);
+        }
+
+        function testInventory() {
+            inv.player.addItem('iron', 10);
+            inv.player.addItem('wood', 5);
+            const has = inv.player.hasItem('iron', 15);
+            const count = inv.player.countItem('iron');
+            inv.player.removeItem('iron', 3);
+            const after = inv.player.countItem('iron');
+            setR('t18', count === 42 && after === 39);
+            log('Inventory: iron=' + count + ' after remove=' + after, 'ok');
+        }
+
+        function testCrafting() {
+            inv.player.addItem('wood', 64);
+            inv.player.addItem('iron', 32);
+            const canCraft = craft.canCraft('door');
+            const result = craft.craft('door');
+            setR('t19', canCraft && result && result.success);
+            log('Crafting: canCraft=' + canCraft + ' result=' + JSON.stringify(result?.recipe?.name), 'ok');
+            renderCraftUI();
+        }
+
+        function testPersistence() {
+            const d = ios.create('DOOR', 60, 2, 0);
+            ios.interact(d.id);
+            const state1 = ios.sm.get(d.id).state;
+            const data = ios.serialize();
+            const ios2 = new InteractiveObjectSystem();
+            ios2.deserialize(data);
+            const state2 = ios2.get(d.id)?.state;
+            setR('t20', state1 === state2);
+            log('Persistence: ' + state1 + ' → ' + state2, 'ok');
+        }
+
+        init();
+    </script>
+</body>
+</html>

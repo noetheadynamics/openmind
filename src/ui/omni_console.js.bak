@@ -1,0 +1,675 @@
+class OmniConsole {
+    constructor() {
+        this.engine = new EngineConnection();
+        this.activePanel = 'prompt';
+        this.promptHistory = [];
+        this.historyIndex = -1;
+        this.bookmarks = [];
+        this.forgeHistory = [];
+        this.currentEnv = 'earth';
+        this.selectedAgent = -1;
+        this.lightMode = false;
+        this.suggestions = [
+            'Create a 10x10 stone platform',
+            'Set weather to rain',
+            'What time is it?',
+            'Place a diamond block at 5,5,5',
+            'Generate a fireproof alien glass',
+            'Pause simulation',
+            'Speed up 10x',
+            'Show temperature heatmap',
+            'Create a house with wood walls',
+            'Set gravity to Moon levels'
+        ];
+        this.speedLabels = ['0.1x', '0.25x', '0.5x', '1x', '2x', '5x', '10x', '100x'];
+    }
+
+    init() {
+        this.bindTopBar();
+        this.bindPrompt();
+        this.bindTime();
+        this.bindOverlays();
+        this.bindAgents();
+        this.bindEnvironment();
+        this.bindForge();
+        this.bindExport();
+        this.bindTeleport();
+        this.bindBrain();
+        this.bindMisc();
+        this.engine.on('log', d => this.log(d.msg, d.type));
+        this.engine.on('connected', () => this.onConnected());
+        this.loadWASM();
+        this.renderSuggestions();
+    }
+
+    /* ====== WASM LOADING ====== */
+    async loadWASM() {
+        const overlay = document.getElementById('loadingOverlay');
+        const text = document.getElementById('loadingText');
+        overlay.classList.add('visible');
+        text.textContent = 'Loading WebAssembly engine...';
+        const ok = await this.engine.load();
+        if (ok) {
+            this.engine.initWorld();
+            this.engine.setTimeOfDay(6);
+            this.startSimulation();
+        }
+        overlay.classList.remove('visible');
+        this.updateConnectionStatus(ok);
+    }
+
+    onConnected() {
+        this.updateConnectionStatus(true);
+        this.startSimulation();
+    }
+
+    updateConnectionStatus(connected) {
+        const dot = document.querySelector('#connectionStatus .status-dot');
+        const text = document.querySelector('#connectionStatus .status-text');
+        if (connected) { dot.classList.add('connected'); text.textContent = 'Connected'; }
+        else { dot.classList.remove('connected'); text.textContent = 'Offline'; }
+    }
+
+    startSimulation() {
+        if (this.engine.simRunning) return;
+        this.engine.simRunning = true;
+        this.statsVisible = true;
+        document.getElementById('statsOverlay').style.display = '';
+        this.simLoop();
+    }
+
+    simLoop() {
+        if (!this.engine.simRunning) return;
+        this.engine.tick(1/60);
+        this.updateStats();
+        requestAnimationFrame(() => this.simLoop());
+    }
+
+    updateStats() {
+        const s = this.engine.getWorldStats();
+        document.getElementById('statBlocks').textContent = s.totalBlocks || 0;
+        document.getElementById('statTick').textContent = s.currentTick || 0;
+        document.getElementById('statTemp').textContent = (s.averageTemperature || 293.15).toFixed(1) + ' K';
+        document.getElementById('statFPS').textContent = this.engine.fps;
+        const tod = this.engine.getTimeOfDay();
+        document.getElementById('statTimeOfDay').textContent = this.formatTime(tod);
+        const w = this.engine.getWeather();
+        document.getElementById('statWeather').textContent = this.engine.weatherNames[w.type] || 'CLEAR';
+        document.getElementById('statEntities').textContent = this.engine.getAgentCount();
+        document.getElementById('timeDisplay').textContent = this.formatTimeFull(tod);
+        document.getElementById('tickCount').textContent = 'Tick ' + (s.currentTick || 0);
+    }
+
+    formatTime(h) {
+        const hh = Math.floor(h) % 24;
+        const mm = Math.floor((h - Math.floor(h)) * 60);
+        return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+    }
+
+    formatTimeFull(h) {
+        const hh = Math.floor(h) % 24;
+        const mm = Math.floor((h - Math.floor(h)) * 60);
+        const ss = Math.floor(((h * 60) % 1) * 60);
+        return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+    }
+
+    /* ====== TOP BAR ====== */
+    bindTopBar() {
+        document.querySelectorAll('.topbar-btn[data-panel]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.topbar-btn[data-panel]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const panel = btn.dataset.panel;
+                document.querySelectorAll('.console-main > .panel').forEach(p => p.classList.remove('active'));
+                const target = document.getElementById('panel-' + panel);
+                if (target) target.classList.add('active');
+                this.activePanel = panel;
+            });
+        });
+        document.querySelectorAll('.panel-collapse-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const panel = btn.closest('.panel');
+                panel.classList.toggle('collapsed');
+                btn.textContent = panel.classList.contains('collapsed') ? '+' : '−';
+            });
+        });
+    }
+
+    /* ====== PROMPT INPUT ====== */
+    bindPrompt() {
+        const input = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('promptSendBtn');
+        const historyBtn = document.getElementById('promptHistoryBtn');
+
+        sendBtn.addEventListener('click', () => this.sendPrompt());
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.sendPrompt(); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); this.navigateHistory(-1); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); this.navigateHistory(1); }
+            if (e.key === 'Tab') { e.preventDefault(); this.autocomplete(); }
+        });
+        historyBtn.addEventListener('click', () => this.showHistoryDropdown());
+    }
+
+    sendPrompt() {
+        const input = document.getElementById('promptInput');
+        const text = input.value.trim();
+        if (!text) return;
+        this.promptHistory.unshift(text);
+        if (this.promptHistory.length > 50) this.promptHistory.pop();
+        this.historyIndex = -1;
+        input.value = '';
+        this.addChatMessage('user', text);
+        this.processPrompt(text);
+    }
+
+    processPrompt(text) {
+        const lower = text.toLowerCase();
+        if (lower.startsWith('weather ')) {
+            const w = lower.replace('weather ', '').trim();
+            const map = { clear: 0, rain: 1, snow: 2, storm: 3, fog: 4 };
+            if (map[w] !== undefined) {
+                this.engine.setWeather(map[w]);
+                this.addChatMessage('assistant', 'Weather set to ' + w.toUpperCase());
+            }
+        } else if (lower.startsWith('time ')) {
+            const t = parseFloat(lower.replace('time ', ''));
+            if (!isNaN(t)) { this.engine.setTimeOfDay(t); this.addChatMessage('assistant', 'Time set to ' + this.formatTime(t)); }
+        } else if (lower === 'pause' || lower === 'stop') {
+            this.engine.paused = true;
+            document.getElementById('playPauseBtn').textContent = '▶';
+            this.addChatMessage('assistant', 'Simulation paused.');
+        } else if (lower === 'resume' || lower === 'start' || lower === 'play') {
+            this.engine.paused = false;
+            document.getElementById('playPauseBtn').textContent = '⏸';
+            this.addChatMessage('assistant', 'Simulation resumed.');
+        } else if (lower.startsWith('speed ')) {
+            const s = parseFloat(lower.replace('speed ', ''));
+            if (!isNaN(s)) { this.engine.setTimeScale(s); this.addChatMessage('assistant', 'Speed set to ' + s + 'x'); }
+        } else if (lower === 'help') {
+            this.addChatMessage('assistant', 'Commands: weather <type>, time <hours>, pause, resume, speed <n>, help. Or describe a world to generate.');
+        } else {
+            this.addChatMessage('assistant', 'Processing: "' + text + '"');
+            if (this.engine.wasmReady) {
+                this.engine.generateWorldFromPrompt(text);
+                this.addChatMessage('assistant', 'World generation initiated.');
+            } else {
+                this.addChatMessage('assistant', 'WASM engine not connected. Command logged.');
+            }
+        }
+    }
+
+    addChatMessage(role, text) {
+        const chat = document.getElementById('promptChat');
+        const div = document.createElement('div');
+        div.className = 'chat-message ' + role;
+        const avatar = role === 'user' ? 'You' : role === 'assistant' ? 'AI' : 'SYS';
+        div.innerHTML = `<div class="chat-avatar">${avatar}</div><div class="chat-bubble">${this.escapeHtml(text)}</div>`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    navigateHistory(dir) {
+        if (this.promptHistory.length === 0) return;
+        this.historyIndex = Math.max(-1, Math.min(this.historyIndex + dir, this.promptHistory.length - 1));
+        const input = document.getElementById('promptInput');
+        input.value = this.historyIndex >= 0 ? this.promptHistory[this.historyIndex] : '';
+    }
+
+    autocomplete() {
+        const input = document.getElementById('promptInput');
+        const val = input.value.toLowerCase();
+        const match = this.suggestions.find(s => s.toLowerCase().startsWith(val) && s.toLowerCase() !== val);
+        if (match) input.value = match;
+    }
+
+    renderSuggestions() {
+        const container = document.getElementById('promptSuggestions');
+        container.innerHTML = '';
+        this.suggestions.slice(0, 4).forEach(s => {
+            const chip = document.createElement('button');
+            chip.className = 'suggestion-chip';
+            chip.textContent = s;
+            chip.addEventListener('click', () => {
+                document.getElementById('promptInput').value = s;
+                this.sendPrompt();
+            });
+            container.appendChild(chip);
+        });
+    }
+
+    showHistoryDropdown() {
+        if (this.promptHistory.length === 0) return;
+        const input = document.getElementById('promptInput');
+        input.value = this.promptHistory[0];
+    }
+
+    /* ====== TIME CONTROLS ====== */
+    bindTime() {
+        document.getElementById('playPauseBtn').addEventListener('click', () => {
+            this.engine.paused = !this.engine.paused;
+            document.getElementById('playPauseBtn').textContent = this.engine.paused ? '▶' : '⏸';
+            this.log(this.engine.paused ? 'Paused' : 'Resumed', 'ok');
+        });
+        const rewind = (secs) => { this.engine.rewindTime(secs); this.log('Rewound ' + secs + 's', 'ok'); };
+        const ff = (secs) => { const t = this.engine.getTimeOfDay() + (secs/3600); this.engine.setTimeOfDay(t % 24); this.log('FF +' + secs + 's', 'ok'); };
+        document.getElementById('rewind10s').addEventListener('click', () => rewind(10));
+        document.getElementById('rewind1m').addEventListener('click', () => rewind(60));
+        document.getElementById('rewind5m').addEventListener('click', () => rewind(300));
+        document.getElementById('ff10s').addEventListener('click', () => ff(10));
+        document.getElementById('ff1m').addEventListener('click', () => ff(60));
+        document.getElementById('ff5m').addEventListener('click', () => ff(300));
+
+        const slider = document.getElementById('speedSlider');
+        slider.addEventListener('input', () => {
+            const idx = parseInt(slider.value);
+            const s = this.engine.speedValues[idx];
+            this.engine.setTimeScale(s);
+            document.getElementById('speedLabel').textContent = this.speedLabels[idx];
+        });
+
+        document.querySelectorAll('.time-presets .preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const t = parseFloat(btn.dataset.time);
+                this.engine.setTimeOfDay(t);
+                this.log('Time: ' + btn.textContent, 'ok');
+            });
+        });
+
+        const cycleSlider = document.getElementById('cycleDurationSlider');
+        cycleSlider.addEventListener('input', () => {
+            const v = parseInt(cycleSlider.value);
+            this.engine.setCycleDuration(v);
+            document.getElementById('cycleDurationLabel').textContent = v >= 60 ? (v/60).toFixed(0) + ' min' : v + 's';
+        });
+    }
+
+    /* ====== VISUAL OVERLAYS ====== */
+    bindOverlays() {
+        const toggle = (id, type) => {
+            document.getElementById(id).addEventListener('change', e => {
+                this.engine.setOverlay(type, e.target.checked);
+                document.getElementById('overlayLegend').style.display = e.target.checked ? '' : 'none';
+                this.log((e.target.checked ? 'Showing' : 'Hiding') + ' ' + type + ' overlay', 'ok');
+            });
+        };
+        toggle('overlayStress', 'stress');
+        toggle('overlayTemp', 'temperature');
+        toggle('overlayRadiation', 'radiation');
+        toggle('overlayThoughts', 'thoughts');
+
+        document.getElementById('overlayEcosystem').addEventListener('change', e => {
+            const g = document.getElementById('ecoGraphOverlay');
+            g.style.display = e.target.checked ? '' : 'none';
+            if (e.target.checked) this.startEcoGraph();
+        });
+        toggle('overlayDensity', 'density');
+
+        document.getElementById('ecoGraphClose').addEventListener('click', () => {
+            document.getElementById('ecoGraphOverlay').style.display = 'none';
+            document.getElementById('overlayEcosystem').checked = false;
+        });
+    }
+
+    startEcoGraph() {
+        const canvas = document.getElementById('ecoGraphCanvas');
+        const ctx = canvas.getContext('2d');
+        const data = { predators: [], prey: [] };
+        let frame = 0;
+        const draw = () => {
+            if (document.getElementById('ecoGraphOverlay').style.display === 'none') return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            const p = 50 + Math.sin(frame * 0.02) * 20 + Math.random() * 5;
+            const y = 80 + Math.sin(frame * 0.03 + 1) * 25 + Math.random() * 5;
+            data.predators.push(p); data.prey.push(y);
+            if (data.predators.length > 150) { data.predators.shift(); data.prey.shift(); }
+            ctx.beginPath();
+            data.predators.forEach((v, i) => { i === 0 ? ctx.moveTo(i, v) : ctx.lineTo(i, v); });
+            ctx.strokeStyle = '#ef4444'; ctx.stroke();
+            ctx.beginPath();
+            data.prey.forEach((v, i) => { i === 0 ? ctx.moveTo(i, v) : ctx.lineTo(i, v); });
+            ctx.strokeStyle = '#4ade80'; ctx.stroke();
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(4, 4, 8, 8);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '9px Inter';
+            ctx.fillText('Predator', 16, 12);
+            ctx.fillStyle = '#4ade80'; ctx.fillRect(4, 16, 8, 8);
+            ctx.fillStyle = '#94a3b8'; ctx.fillText('Prey', 16, 24);
+            frame++;
+            requestAnimationFrame(draw);
+        };
+        draw();
+    }
+
+    /* ====== AGENT DASHBOARD ====== */
+    bindAgents() {
+        this.refreshAgents();
+        document.getElementById('agentCloseBtn').addEventListener('click', () => {
+            document.getElementById('agentInspector').style.display = 'none';
+            this.selectedAgent = -1;
+            document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
+        });
+        setInterval(() => this.refreshAgents(), 2000);
+    }
+
+    refreshAgents() {
+        const list = document.getElementById('agentList');
+        const count = this.engine.getAgentCount();
+        if (count === 0) { list.innerHTML = '<div class="agent-empty">No agents in world</div>'; return; }
+        list.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const a = this.engine.getAgentData(i);
+            if (!a) continue;
+            const card = document.createElement('div');
+            card.className = 'agent-card' + (this.selectedAgent === i ? ' selected' : '');
+            card.innerHTML = `<div class="agent-avatar-sm">${(a.name || '?')[0]}</div><div class="agent-info"><div class="agent-card-name">${a.name || 'Agent '+i}</div><div class="agent-card-role">${a.role || 'unknown'}</div></div><div class="agent-card-hp">HP:${a.health || 0}</div>`;
+            card.addEventListener('click', () => this.inspectAgent(i));
+            list.appendChild(card);
+        }
+    }
+
+    inspectAgent(idx) {
+        this.selectedAgent = idx;
+        const a = this.engine.getAgentData(idx);
+        if (!a) return;
+        document.getElementById('agentInspector').style.display = '';
+        document.getElementById('agentAvatar').textContent = (a.name || '?')[0];
+        document.getElementById('agentName').textContent = a.name || 'Agent';
+        document.getElementById('agentRole').textContent = a.role || 'unknown';
+        document.getElementById('agentHealth').style.width = (a.health || 0) + '%';
+        document.getElementById('agentHealthVal').textContent = a.health || 0;
+        document.getElementById('agentHunger').style.width = (a.hunger || 0) + '%';
+        document.getElementById('agentHungerVal').textContent = a.hunger || 0;
+        document.getElementById('agentEnergy').style.width = (a.energy || 100) + '%';
+        document.getElementById('agentEnergyVal').textContent = a.energy || 100;
+        document.getElementById('agentPosition').textContent = `${a.x || 0}, ${a.y || 0}, ${a.z || 0}`;
+        document.getElementById('agentGoal').textContent = a.goal || 'None';
+
+        const memDiv = document.getElementById('agentMemories');
+        memDiv.innerHTML = '';
+        (a.memories || []).slice(-5).forEach(m => {
+            const d = document.createElement('div');
+            d.className = 'memory-entry';
+            d.textContent = m;
+            memDiv.appendChild(d);
+        });
+
+        document.getElementById('agentThoughts').textContent = a.thoughts || 'No thoughts recorded.';
+
+        const relDiv = document.getElementById('agentRelationships');
+        relDiv.innerHTML = '';
+        (a.relationships || []).forEach(r => {
+            const chip = document.createElement('span');
+            chip.className = 'rel-chip ' + (r.type || 'friend');
+            chip.textContent = r.name + ' (' + r.type + ')';
+            relDiv.appendChild(chip);
+        });
+
+        const invDiv = document.getElementById('agentInventory');
+        invDiv.innerHTML = '';
+        (a.inventory || []).forEach(item => {
+            const chip = document.createElement('span');
+            chip.className = 'inv-chip';
+            chip.textContent = item;
+            invDiv.appendChild(chip);
+        });
+
+        document.querySelectorAll('.agent-card').forEach((c, i) => {
+            c.classList.toggle('selected', i === idx);
+        });
+    }
+
+    /* ====== ENVIRONMENT PRESETS ====== */
+    bindEnvironment() {
+        document.querySelectorAll('.env-card').forEach(card => {
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.env-card').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                this.currentEnv = card.dataset.preset;
+                const p = this.engine.envPresets[this.currentEnv];
+                document.getElementById('envCustomSliders').style.display = this.currentEnv === 'custom' ? '' : 'none';
+                document.getElementById('envInfoGravity').textContent = p.gravity + ' m/s²';
+                document.getElementById('envInfoAir').textContent = p.airDensity + ' kg/m³';
+                document.getElementById('envInfoTemp').textContent = p.temperature + ' K';
+                if (this.currentEnv === 'custom') {
+                    document.getElementById('envGravity').value = p.gravity;
+                    document.getElementById('envGravityVal').textContent = p.gravity;
+                    document.getElementById('envAirDensity').value = p.airDensity;
+                    document.getElementById('envAirDensityVal').textContent = p.airDensity;
+                    document.getElementById('envTemp').value = p.temperature;
+                    document.getElementById('envTempVal').textContent = p.temperature.toFixed(1);
+                }
+            });
+        });
+
+        ['envGravity', 'envAirDensity', 'envTemp', 'envHumidity'].forEach(id => {
+            document.getElementById(id).addEventListener('input', e => {
+                document.getElementById(id + 'Val').textContent = parseFloat(e.target.value).toFixed(id === 'envHumidity' ? 0 : id === 'envTemp' ? 1 : 2);
+            });
+        });
+
+        document.getElementById('envApplyBtn').addEventListener('click', () => {
+            const p = this.engine.envPresets[this.currentEnv];
+            this.log('Applied preset: ' + this.currentEnv + ' (g=' + p.gravity + ')', 'ok');
+            this.addChatMessage('assistant', 'Environment set to ' + this.currentEnv + '. Gravity: ' + p.gravity + ' m/s², Air: ' + p.airDensity + ' kg/m³');
+        });
+    }
+
+    /* ====== MATERIAL FORGE ====== */
+    bindForge() {
+        document.getElementById('forgeGenerateBtn').addEventListener('click', () => this.generateMaterial());
+        document.getElementById('forgeInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.generateMaterial(); }
+        });
+    }
+
+    generateMaterial() {
+        const input = document.getElementById('forgeInput').value.trim();
+        if (!input) return;
+        document.getElementById('forgeLoading').style.display = '';
+        document.getElementById('forgeResult').style.display = 'none';
+        this.log('Generating material: ' + input.substring(0, 50) + '...', 'ok');
+
+        setTimeout(() => {
+            const mat = this.generateMockMaterial(input);
+            this.showMaterialResult(mat);
+            this.forgeHistory.unshift(mat);
+            if (this.forgeHistory.length > 5) this.forgeHistory.pop();
+            this.renderForgeHistory();
+        }, 1200);
+    }
+
+    generateMockMaterial(desc) {
+        const colors = ['#6366f1', '#ef4444', '#22c55e', '#f97316', '#06b6d4', '#a855f7', '#ec4899', '#14b8a6'];
+        return {
+            name: desc.substring(0, 30).replace(/[^a-zA-Z0-9 ]/g, ''),
+            color: colors[Math.floor(Math.random() * colors.length)],
+            mass: (Math.random() * 10 + 0.1).toFixed(2),
+            hardness: (Math.random() * 10).toFixed(1),
+            meltingPoint: Math.floor(Math.random() * 3000 + 200),
+            density: Math.floor(Math.random() * 10000 + 100),
+            tensileStrength: Math.floor(Math.random() * 500 + 10),
+            description: desc
+        };
+    }
+
+    showMaterialResult(mat) {
+        document.getElementById('forgeLoading').style.display = 'none';
+        document.getElementById('forgeResult').style.display = '';
+        document.getElementById('materialSwatch').style.background = mat.color;
+        document.getElementById('materialProps').innerHTML = `
+            <div class="material-prop"><span>Name</span><span>${mat.name}</span></div>
+            <div class="material-prop"><span>Mass</span><span>${mat.mass} kg</span></div>
+            <div class="material-prop"><span>Hardness</span><span>${mat.hardness}</span></div>
+            <div class="material-prop"><span>Melting Pt</span><span>${mat.meltingPoint} K</span></div>
+            <div class="material-prop"><span>Density</span><span>${mat.density} kg/m³</span></div>
+            <div class="material-prop"><span>Tensile</span><span>${mat.tensileStrength} MPa</span></div>
+        `;
+        document.getElementById('forgeAddBtn').onclick = () => {
+            this.log('Material "' + mat.name + '" added to world.', 'ok');
+            this.addChatMessage('assistant', 'Material "' + mat.name + '" forged and added to your inventory.');
+        };
+    }
+
+    renderForgeHistory() {
+        const list = document.getElementById('forgeHistory');
+        list.innerHTML = '';
+        this.forgeHistory.forEach(m => {
+            const item = document.createElement('div');
+            item.className = 'forge-history-item';
+            item.innerHTML = `<div class="forge-history-swatch" style="background:${m.color}"></div><div class="forge-history-name">${m.name}</div>`;
+            item.addEventListener('click', () => this.showMaterialResult(m));
+            list.appendChild(item);
+        });
+    }
+
+    /* ====== EXPORT HUB ====== */
+    bindExport() {
+        document.querySelectorAll('.export-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const fmt = btn.dataset.format;
+                this.log('Exporting as .' + fmt.toUpperCase() + '...', 'ok');
+                const progress = document.getElementById('exportProgress');
+                progress.style.display = '';
+                let pct = 0;
+                const iv = setInterval(() => {
+                    pct += Math.random() * 15;
+                    if (pct >= 100) {
+                        pct = 100; clearInterval(iv);
+                        setTimeout(() => { progress.style.display = 'none'; }, 500);
+                        this.log('Export complete: world.' + fmt, 'ok');
+                        this.addChatMessage('assistant', 'Exported world as .' + fmt.toUpperCase());
+                    }
+                    document.getElementById('exportProgressFill').style.width = pct + '%';
+                    document.getElementById('exportProgressText').textContent = Math.round(pct) + '% — Exporting world...';
+                }, 200);
+            });
+        });
+    }
+
+    /* ====== TELEPORT ====== */
+    bindTeleport() {
+        document.getElementById('tpGoBtn').addEventListener('click', () => {
+            const x = parseFloat(document.getElementById('tpX').value) || 0;
+            const y = parseFloat(document.getElementById('tpY').value) || 0;
+            const z = parseFloat(document.getElementById('tpZ').value) || 0;
+            this.engine.teleportCamera(x, y, z);
+            this.log('Teleported to ' + x + ',' + y + ',' + z, 'ok');
+        });
+        document.getElementById('saveBookmarkBtn').addEventListener('click', () => {
+            const x = parseFloat(document.getElementById('tpX').value) || 0;
+            const y = parseFloat(document.getElementById('tpY').value) || 0;
+            const z = parseFloat(document.getElementById('tpZ').value) || 0;
+            const name = 'Bookmark ' + (this.bookmarks.length + 1);
+            this.bookmarks.push({ name, x, y, z });
+            this.renderBookmarks();
+            this.log('Bookmark saved: ' + name, 'ok');
+        });
+    }
+
+    renderBookmarks() {
+        const list = document.getElementById('bookmarkList');
+        if (this.bookmarks.length === 0) { list.innerHTML = '<div class="bookmark-empty">No bookmarks saved</div>'; return; }
+        list.innerHTML = '';
+        this.bookmarks.forEach((b, i) => {
+            const item = document.createElement('div');
+            item.className = 'bookmark-item';
+            item.innerHTML = `<span class="bookmark-name">${b.name}</span><span class="bookmark-coords">${b.x},${b.y},${b.z}</span><span class="bookmark-del" data-idx="${i}">✕</span>`;
+            item.querySelector('.bookmark-name').addEventListener('click', () => {
+                document.getElementById('tpX').value = b.x;
+                document.getElementById('tpY').value = b.y;
+                document.getElementById('tpZ').value = b.z;
+                this.engine.teleportCamera(b.x, b.y, b.z);
+            });
+            item.querySelector('.bookmark-del').addEventListener('click', (e) => {
+                this.bookmarks.splice(parseInt(e.target.dataset.idx), 1);
+                this.renderBookmarks();
+            });
+            list.appendChild(item);
+        });
+    }
+
+    /* ====== AI BRAIN SWITCHER ====== */
+    bindBrain() {
+        document.getElementById('brainCloudBtn').addEventListener('click', () => {
+            document.getElementById('brainCloudBtn').classList.add('active');
+            document.getElementById('brainLocalBtn').classList.remove('active');
+            document.getElementById('brainCloudSettings').style.display = '';
+            document.getElementById('brainLocalSettings').style.display = 'none';
+        });
+        document.getElementById('brainLocalBtn').addEventListener('click', () => {
+            document.getElementById('brainLocalBtn').classList.add('active');
+            document.getElementById('brainCloudBtn').classList.remove('active');
+            document.getElementById('brainLocalSettings').style.display = '';
+            document.getElementById('brainCloudSettings').style.display = 'none';
+        });
+        document.getElementById('llmProvider').addEventListener('change', e => {
+            const models = {
+                openai: ['gpt-4', 'gpt-4o', 'gpt-4o-mini'],
+                anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
+                google: ['gemini-pro', 'gemini-ultra', 'gemini-nano'],
+                custom: ['custom-model']
+            };
+            const sel = document.getElementById('llmModel');
+            sel.innerHTML = '';
+            (models[e.target.value] || []).forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m; opt.textContent = m;
+                sel.appendChild(opt);
+            });
+        });
+        document.getElementById('brainTestBtn').addEventListener('click', () => {
+            const dot = document.getElementById('brainStatusDot');
+            const text = document.getElementById('brainStatusText');
+            dot.style.background = 'var(--warning)';
+            text.textContent = 'Testing...';
+            setTimeout(() => {
+                const isLocal = document.getElementById('brainLocalBtn').classList.contains('active');
+                if (isLocal) {
+                    dot.style.background = 'var(--success)';
+                    text.textContent = 'Connected to Ollama';
+                } else {
+                    const key = document.getElementById('llmApiKey').value;
+                    if (key && key.length > 10) {
+                        dot.style.background = 'var(--success)';
+                        text.textContent = 'Connected to ' + document.getElementById('llmProvider').value;
+                    } else {
+                        dot.style.background = 'var(--error)';
+                        text.textContent = 'Invalid API key';
+                    }
+                }
+            }, 1500);
+        });
+    }
+
+    /* ====== MISC ====== */
+    bindMisc() {
+        document.getElementById('darkModeToggle').addEventListener('click', () => {
+            this.lightMode = !this.lightMode;
+            document.body.classList.toggle('light', this.lightMode);
+        });
+        document.getElementById('clearLogBtn').addEventListener('click', () => {
+            document.getElementById('consoleLogBody').innerHTML = '';
+        });
+    }
+
+    log(msg, type) {
+        const body = document.getElementById('consoleLogBody');
+        const line = document.createElement('div');
+        line.className = 'console-line';
+        const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        line.innerHTML = `<span class="time">[${now}]</span><span class="msg ${type || ''}">${msg}</span>`;
+        body.appendChild(line);
+        body.scrollTop = body.scrollHeight;
+        if (body.children.length > 200) body.removeChild(body.firstChild);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const app = new OmniConsole();
+    app.init();
+    window.__omni = app;
+});

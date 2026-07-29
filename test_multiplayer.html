@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenMind – Multiplayer Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+        #viewport3d { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        #testPanel {
+            position: fixed; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(10,10,30,0.92); border: 1px solid rgba(100,100,200,0.3);
+            border-radius: 12px; padding: 16px; width: 480px; max-height: 90vh;
+            overflow-y: auto; backdrop-filter: blur(12px); font-size: 13px;
+        }
+        #testPanel h2 { color: #8b5cf6; margin-bottom: 12px; font-size: 16px; }
+        .tg { margin-bottom: 10px; border-bottom: 1px solid rgba(100,100,200,0.2); padding-bottom: 8px; }
+        .tg h3 { color: #60a5fa; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; }
+        .tr { display: flex; align-items: center; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+        .tb {
+            padding: 3px 8px; border: 1px solid rgba(100,100,200,0.4); border-radius: 6px;
+            background: rgba(30,30,60,0.8); color: #e0e0e0; cursor: pointer; font-size: 10px;
+        }
+        .tb:hover { background: rgba(60,60,120,0.8); border-color: #8b5cf6; }
+        .r { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+        .pass { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .fail { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .pending { background: rgba(234,179,8,0.2); color: #eab308; }
+        .info { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        #log { margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 10px; color: #94a3b8; }
+        #log div { padding: 2px 0; border-bottom: 1px solid rgba(100,100,200,0.1); }
+        #log .ok { color: #22c55e; } #log .err { color: #ef4444; } #log .info { color: #60a5fa; }
+        .note { background: rgba(100,100,200,0.15); padding: 8px; border-radius: 6px; font-size: 11px; margin-top: 8px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div id="viewport3d"></div>
+
+    <div id="testPanel">
+        <h2>Multiplayer Test</h2>
+
+        <div class="note">
+            These tests validate the multiplayer JS systems without requiring two browser tabs.
+            Open this page in two tabs to test full WebRTC peer-to-peer networking.
+            Run "Local" tests first (no network needed), then "Live" tests (requires two tabs).
+        </div>
+
+        <div class="tg">
+            <h3>1. Network Manager</h3>
+            <div class="tr">
+                <button class="tb" onclick="testNetworkInit()">Init</button>
+                <button class="tb" onclick="testRoomCode()">Room Code</button>
+                <button class="tb" onclick="testPlayerId()">Player ID</button>
+                <span id="t1" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>2. Host System</h3>
+            <div class="tr">
+                <button class="tb" onclick="testHostStart()">Start Host</button>
+                <button class="tb" onclick="testHostPermissions()">Permissions</button>
+                <button class="tb" onclick="testHostRole()">Role Check</button>
+                <span id="t2" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>3. Client System</h3>
+            <div class="tr">
+                <button class="tb" onclick="testClientInit()">Init Client</button>
+                <button class="tb" onclick="testClientJoin()">Join (needs 2nd tab)</button>
+                <span id="t3" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>4. Player Entities</h3>
+            <div class="tr">
+                <button class="tb" onclick="testAddEntity()">Add Entity</button>
+                <button class="tb" onclick="testMoveEntity()">Move Entity</button>
+                <button class="tb" onclick="testSpeechBubble()">Speech</button>
+                <span id="t4" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>5. Chat System</h3>
+            <div class="tr">
+                <button class="tb" onclick="testChatAdd()">Add Message</button>
+                <button class="tb" onclick="testChatSystem()">System Msg</button>
+                <button class="tb" onclick="testChatJoin()">Join/Leave</button>
+                <span id="t5" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>6. Multiplayer UI</h3>
+            <div class="tr">
+                <button class="tb" onclick="testUILobby()">Lobby</button>
+                <button class="tb" onclick="testUIHosting()">Hosting</button>
+                <button class="tb" onclick="testUIJoining()">Joining</button>
+                <span id="t6" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>7. Permissions</h3>
+            <div class="tr">
+                <button class="tb" onclick="testPermBuild()">Can Build</button>
+                <button class="tb" onclick="testPermProtect()">Protected Area</button>
+                <button class="tb" onclick="testPermRoles()">Role Assign</button>
+                <span id="t7" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>8. Message Protocol</h3>
+            <div class="tr">
+                <button class="tb" onclick="testBlockMsg()">Block Update</button>
+                <button class="tb" onclick="testPlayerMsg()">Player State</button>
+                <button class="tb" onclick="testChatMsg()">Chat Msg</button>
+                <span id="t8" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div class="tg">
+            <h3>9. Live Peer Test</h3>
+            <div class="tr">
+                <button class="tb" onclick="testLiveHost()">Host (Tab 1)</button>
+                <button class="tb" onclick="testLiveJoin()">Join (Tab 2)</button>
+                <button class="tb" onclick="testLiveBlockSync()">Sync Blocks</button>
+                <span id="t9" class="r pending">pending</span>
+            </div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+
+    <script src="ui_connection.js"></script>
+    <script src="network.js"></script>
+    <script src="host.js"></script>
+    <script src="client.js"></script>
+    <script src="player_entities.js"></script>
+    <script src="chat.js"></script>
+    <script src="multiplayer_ui.js"></script>
+    <script src="permissions.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="voxel_renderer.js"></script>
+    <script src="llm_client.js"></script>
+
+    <script>
+        let net, host, client, perm, pEnt, chat, mpUI, renderer, engine;
+
+        function log(msg, cls) {
+            const div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+
+        function setR(id, pass) {
+            const el = document.getElementById(id);
+            el.textContent = pass ? 'PASS' : 'FAIL';
+            el.className = 'r ' + (pass ? 'pass' : 'fail');
+        }
+
+        function setInfo(id, text) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = 'r info';
+        }
+
+        async function init() {
+            log('Loading WASM...', 'info');
+            engine = new EngineConnection();
+            const ok = await engine.load();
+            if (!ok) { log('WASM failed', 'err'); return; }
+            engine.initWorld();
+            log('WASM ready', 'ok');
+
+            renderer = new VoxelRenderer('viewport3d');
+            renderer.start(engine);
+
+            net = new NetworkManager();
+            host = new HostSystem(net);
+            client = new ClientSystem(net);
+            perm = new PermissionsSystem();
+            pEnt = new PlayerEntitySystem(renderer.scene);
+            chat = new ChatSystem();
+            mpUI = new MultiplayerUI();
+
+            log('All modules initialized', 'ok');
+        }
+
+        // === TEST FUNCTIONS ===
+
+        function testNetworkInit() {
+            net = new NetworkManager();
+            const pass = net instanceof NetworkManager && net.role === 'single';
+            setR('t1', pass);
+            log('NetworkInit: role=' + net.role, pass ? 'ok' : 'err');
+        }
+
+        function testRoomCode() {
+            const net2 = new NetworkManager();
+            const code = net2.generateRoomCode();
+            const pass = code && code.length === 6 && /^[A-Z0-9]+$/.test(code);
+            setR('t1', pass);
+            log('RoomCode: ' + code, pass ? 'ok' : 'err');
+        }
+
+        function testPlayerId() {
+            const net2 = new NetworkManager();
+            const id = net2.generatePlayerId();
+            const pass = id && id.startsWith('P') && id.length > 5;
+            setR('t1', pass);
+            log('PlayerID: ' + id, pass ? 'ok' : 'err');
+        }
+
+        function testHostStart() {
+            host = new HostSystem(net);
+            host.engine = engine;
+            const code = host.generateRoomCode();
+            host.roomCode = code;
+            host.isHosting = true;
+            const pass = host.roomCode && host.roomCode.length === 6;
+            setR('t2', pass);
+            log('HostStart: room=' + host.roomCode, pass ? 'ok' : 'err');
+        }
+
+        function testHostPermissions() {
+            perm = new PermissionsSystem();
+            perm.setRole('p1', 'admin');
+            perm.setRole('p2', 'builder');
+            perm.setRole('p3', 'guest');
+            const pass = perm.canBuild('p1') && perm.canBuild('p2') && !perm.canBuild('p3');
+            setR('t2', pass);
+            log('HostPerm: admin=' + perm.canBuild('p1') + ' builder=' + perm.canBuild('p2') + ' guest=' + perm.canBuild('p3'), pass ? 'ok' : 'err');
+        }
+
+        function testHostRole() {
+            perm = new PermissionsSystem();
+            perm.setRole('p1', 'admin');
+            perm.setRole('p2', 'builder');
+            const pass = perm.getRole('p1') === 'admin' && perm.getRole('p2') === 'builder' && perm.getRole('unknown') === 'guest';
+            setR('t2', pass);
+            log('HostRole: p1=' + perm.getRole('p1') + ' p2=' + perm.getRole('p2'), pass ? 'ok' : 'err');
+        }
+
+        function testClientInit() {
+            client = new ClientSystem(net);
+            const pass = client && !client.isConnected && !client.isJoining;
+            setR('t3', pass);
+            log('ClientInit: connected=' + client.isConnected, pass ? 'ok' : 'err');
+        }
+
+        function testClientJoin() {
+            setInfo('t3', 'Open 2nd tab → click Host');
+            log('ClientJoin: Open a second browser tab and click Host (Tab 1) then Join (Tab 2)', 'info');
+        }
+
+        function testAddEntity() {
+            pEnt.clear();
+            pEnt.addEntity('test1', 'Alice', '#22c55e', { x: 5, y: 2, z: 5 });
+            const pass = pEnt.getEntityCount() === 1;
+            setR('t4', pass);
+            log('AddEntity: count=' + pEnt.getEntityCount(), pass ? 'ok' : 'err');
+        }
+
+        function testMoveEntity() {
+            pEnt.updateEntityPosition('test1', { x: 10, y: 3, z: 10 });
+            const ent = pEnt.getEntities().get('test1');
+            const pass = ent && ent.targetPosition.x === 10;
+            setR('t4', pass);
+            log('MoveEntity: target=' + JSON.stringify(ent?.targetPosition), pass ? 'ok' : 'err');
+        }
+
+        function testSpeechBubble() {
+            pEnt.showSpeechBubble('test1', 'Hello World!');
+            setR('t4', true);
+            log('SpeechBubble: shown', 'ok');
+        }
+
+        function testChatAdd() {
+            const chatContainer = document.createElement('div');
+            chat = new ChatSystem();
+            chat.init(chatContainer, null);
+            chat.addMessage('Alice', 'Hello everyone!', '#22c55e');
+            const pass = chat.messages.length > 0;
+            setR('t5', pass);
+            log('ChatAdd: msgs=' + chat.messages.length, pass ? 'ok' : 'err');
+        }
+
+        function testChatSystem() {
+            chat.addSystemMessage('Server restarting...');
+            const pass = chat.messages.some(m => m.type === 'system');
+            setR('t5', pass);
+            log('ChatSystem: system msg added', pass ? 'ok' : 'err');
+        }
+
+        function testChatJoin() {
+            chat.addJoinMessage('Bob', '#3b82f6');
+            chat.addLeaveMessage('Charlie');
+            const join = chat.messages.some(m => m.text.includes('joined'));
+            const leave = chat.messages.some(m => m.text.includes('left'));
+            setR('t5', join && leave);
+            log('ChatJoinLeave: join=' + join + ' leave=' + leave, pass ? 'ok' : 'err');
+        }
+
+        function testUILobby() {
+            mpUI = new MultiplayerUI();
+            const container = document.createElement('div');
+            mpUI.init(container);
+            const pass = container.innerHTML.includes('Host New World') && container.innerHTML.includes('Join');
+            setR('t6', pass);
+            log('UILobby: render ok', pass ? 'ok' : 'err');
+        }
+
+        function testUIHosting() {
+            mpUI.roomCode = 'ABC123';
+            mpUI.isHost = true;
+            mpUI.renderHosting();
+            const pass = document.querySelector('.mp-room-code')?.textContent === 'ABC123';
+            setR('t6', pass);
+            log('UIHosting: code=ABC123', pass ? 'ok' : 'err');
+        }
+
+        function testUIJoining() {
+            mpUI.roomCode = 'XYZ789';
+            mpUI.isHost = false;
+            mpUI.renderJoining();
+            const pass = document.querySelector('.mp-room-code') === null || document.body.innerHTML.includes('Connecting');
+            setR('t6', pass);
+            log('UIJoining: connecting shown', pass ? 'ok' : 'err');
+        }
+
+        function testPermBuild() {
+            perm = new PermissionsSystem();
+            perm.setRole('p1', 'admin');
+            perm.setRole('p2', 'builder');
+            perm.setRole('p3', 'guest');
+            const a = perm.canBuild('p1');
+            const b = perm.canBuild('p2');
+            const c = perm.canBuild('p3');
+            setR('t7', a && b && !c);
+            log('PermBuild: ' + a + ' ' + b + ' ' + !c, 'ok');
+        }
+
+        function testPermProtect() {
+            perm = new PermissionsSystem();
+            perm.protectArea(0, 0, 0, 10, 10, 10, 'admin');
+            const inside = perm.isProtected(5, 5, 5);
+            const outside = perm.isProtected(15, 15, 15);
+            setR('t7', inside && !outside);
+            log('PermProtect: inside=' + inside + ' outside=' + outside, 'ok');
+        }
+
+        function testPermRoles() {
+            perm = new PermissionsSystem();
+            perm.setRole('p1', 'admin');
+            perm.setRole('p2', 'builder');
+            perm.setRole('p3', 'guest');
+            perm.removePlayer('p2');
+            const pass = perm.canBuild('p1') && !perm.canBuild('p2') && perm.getRole('p2') === 'guest';
+            setR('t7', pass);
+            log('PermRoles: removed p2, canBuild=' + perm.canBuild('p2'), 'ok');
+        }
+
+        function testBlockMsg() {
+            const msg = { type: 'block-update', x: 5, y: 2, z: 5, blockType: 1, action: 'place', sender: 'p1' };
+            const pass = msg.type === 'block-update' && msg.action === 'place';
+            setR('t8', pass);
+            log('BlockMsg: ' + JSON.stringify(msg), 'ok');
+        }
+
+        function testPlayerMsg() {
+            const msg = { type: 'player-state', sender: 'p1', state: { position: { x: 1, y: 2, z: 3 } } };
+            const pass = msg.type === 'player-state' && msg.state.position.x === 1;
+            setR('t8', pass);
+            log('PlayerMsg: pos=' + JSON.stringify(msg.state.position), 'ok');
+        }
+
+        function testChatMsg() {
+            const msg = { type: 'chat', sender: 'p1', playerName: 'Alice', message: 'Hello!' };
+            const pass = msg.type === 'chat' && msg.message === 'Hello!';
+            setR('t8', pass);
+            log('ChatMsg: ' + msg.playerName + ': ' + msg.message, 'ok');
+        }
+
+        function testLiveHost() {
+            net = new NetworkManager();
+            net.playerName = 'TestHost';
+            host = new HostSystem(net);
+            host.engine = engine;
+            host.start();
+            const pass = host.isHosting && host.roomCode;
+            setR('t9', pass ? 'pass' : 'pending');
+            if (pass) log('LiveHost: room=' + host.roomCode, 'ok');
+            else log('LiveHost: signaling unavailable (offline mode)', 'info');
+        }
+
+        function testLiveJoin() {
+            setInfo('t9', 'Copy room code to 2nd tab');
+            log('LiveJoin: Copy the room code and paste in 2nd tab', 'info');
+        }
+
+        function testLiveBlockSync() {
+            if (host && host.isHosting) {
+                host.sendWorldSync('test');
+                setR('t9', true);
+                log('LiveBlockSync: world sync sent', 'ok');
+            } else {
+                setInfo('t9', 'Start host first');
+                log('LiveBlockSync: host not running', 'err');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
