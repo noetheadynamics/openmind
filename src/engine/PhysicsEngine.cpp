@@ -6,10 +6,6 @@
 
 namespace OpenMind {
 
-static inline uint64_t positionHash(int x, int y, int z) {
-    return (static_cast<uint64_t>(x) << 42) | (static_cast<uint64_t>(y) << 21) | static_cast<uint64_t>(z);
-}
-
 PhysicsEngine::PhysicsEngine()
     : gravity(GRAVITY_EARTH)
     , timeScale(1.0f)
@@ -387,10 +383,10 @@ void PhysicsEngine::tickPhysics(VoxelOctree& world, float dt) {
                 if (data.type == BlockType::AIR) continue;
 
                 if (data.props.thermal.heatOutput > 0.0f) {
-                    world.setBlockTemperature(x, y, z, data.props.thermal.heatOutput);
+                    world.setBlockTemperature(x, y, z, data.currentTemperature + data.props.thermal.heatOutput * dt);
                 }
 
-                PhysicsData& pd = physicsDataMap[positionHash(x, y, z)];
+                PhysicsData& pd = physicsDataMap[posHash(x, y, z)];
                 if (pd.temperature == 0.0f) pd.temperature = data.props.thermal.meltingPoint * 0.5f;
                 applyGravityToBlock(world, x, y, z, pd, data.props, dt);
             }
@@ -628,11 +624,11 @@ void PhysicsEngine::handleCondensation(VoxelOctree& world, int x, int y, int z) 
         world.setBlockTemperature(x, y, z, temp);
         world.setBlockDensity(x, y, z, liquidDensity);
 
-        contractGas(world, x, y, z);
+        removeAdjacentGas(world, x, y, z);
     }
 }
 
-void PhysicsEngine::contractGas(VoxelOctree& world, int x, int y, int z) {
+void PhysicsEngine::removeAdjacentGas(VoxelOctree& world, int x, int y, int z) {
     const int offsets[6][3] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
 
     int removed = 0;
@@ -765,7 +761,7 @@ void PhysicsEngine::tickThermodynamics(VoxelOctree& world, float dt) {
                 if (!world.getBlock(x, y, z, data)) continue;
                 if (data.type == BlockType::AIR) continue;
 
-                PhysicsData& pd = physicsDataMap[positionHash(x, y, z)];
+                PhysicsData& pd = physicsDataMap[posHash(x, y, z)];
                 if (pd.state == BlockState{}) {
                     pd.state = BlockState::SOLID;
                     if (data.type == BlockType::WATER) pd.state = BlockState::LIQUID;
@@ -790,7 +786,7 @@ void PhysicsEngine::tickThermodynamics(VoxelOctree& world, float dt) {
                 float temp = data.currentTemperature;
 
                 if (data.props.thermal.heatOutput > 0.0f) {
-                    world.setBlockTemperature(x, y, z, data.props.thermal.heatOutput);
+                    world.setBlockTemperature(x, y, z, data.currentTemperature + data.props.thermal.heatOutput * dt);
                 } else {
                     float coolingRate = 0.01f;
                     float deltaT = temp - ambientTemperature;
@@ -800,7 +796,7 @@ void PhysicsEngine::tickThermodynamics(VoxelOctree& world, float dt) {
                     }
                 }
 
-                PhysicsData& pd = physicsDataMap[positionHash(x, y, z)];
+                PhysicsData& pd = physicsDataMap[posHash(x, y, z)];
                 if (pd.state == BlockState{}) {
                     pd.state = BlockState::SOLID;
                     if (data.type == BlockType::WATER) pd.state = BlockState::LIQUID;
@@ -814,7 +810,7 @@ void PhysicsEngine::tickThermodynamics(VoxelOctree& world, float dt) {
 
                 VoxelData freshData;
                 if (world.getBlock(x, y, z, freshData)) {
-                    PhysicsData& pd2 = physicsDataMap[positionHash(x, y, z)];
+                    PhysicsData& pd2 = physicsDataMap[posHash(x, y, z)];
                     pd2.state = freshData.state;
                     handlePhaseChange(world, x, y, z, pd2, freshData.props);
                 }
@@ -1389,7 +1385,7 @@ void PhysicsEngine::tickChemistry(VoxelOctree& world, float dt) {
                 if (!world.getBlock(x, y, z, data)) continue;
                 if (data.type == BlockType::AIR) continue;
 
-                PhysicsData& pd = physicsDataMap[positionHash(x, y, z)];
+                PhysicsData& pd = physicsDataMap[posHash(x, y, z)];
                 if (pd.health == 0.0f) pd.health = data.props.health.currentHealth;
                 pd.isOnFire = false;
 
@@ -1503,7 +1499,6 @@ void PhysicsEngine::processEcosystem(VoxelOctree& world, float dt) {
             }
         }
 
-        agent.vy -= gravity * dt * 0.5f;
     }
 }
 
@@ -1857,10 +1852,12 @@ void PhysicsEngine::processPlantGrowth(VoxelOctree& world, int x, int y, int z, 
     if (data.type == BlockType::AIR) return;
 
     bool isSeed = (data.type == BlockType::CUSTOM && data.props.biological.isOrganic);
-    bool isPlant = (data.type == BlockType::CUSTOM && data.props.biological.isOrganic);
-    if (!isSeed && !isPlant) return;
 
     uint64_t key = posHash(x, y, z);
+    auto regIt = plantRegistry.find(key);
+    bool isPlant = (regIt != plantRegistry.end() && regIt->second.state != PlantState::NONE && regIt->second.state != PlantState::SEED);
+    if (!isSeed && !isPlant) return;
+
     PlantData& pd = plantRegistry[key];
 
     if (pd.state == PlantState::NONE) {
@@ -1928,7 +1925,7 @@ void PhysicsEngine::tickBiology(VoxelOctree& world, float dt) {
                 if (!world.getBlock(x, y, z, data)) continue;
                 if (data.type == BlockType::AIR) continue;
 
-                PhysicsData& pd = physicsDataMap[positionHash(x, y, z)];
+                PhysicsData& pd = physicsDataMap[posHash(x, y, z)];
                 if (pd.bioStage == BiologicalStage{}) {
                     pd.bioStage = BiologicalStage::SEED;
                     pd.growthTimer = data.props.biological.growthRate * 50.0f;
@@ -2694,7 +2691,11 @@ void PhysicsEngine::tickAgents(VoxelOctree& world, float dt) {
     applyAtmosphericDrag(world, dt);
     processRocketPhysics(world, dt);
     propagateSound(world, dt);
+    soundSources.erase(std::remove_if(soundSources.begin(), soundSources.end(),
+        [](const auto& s) { return !s.isActive; }), soundSources.end());
     propagateLight(world, dt);
+    lightSources.erase(std::remove_if(lightSources.begin(), lightSources.end(),
+        [](const auto& ls) { return !ls.isActive; }), lightSources.end());
 
     for (auto& agent : agents) {
         if (!agent.isAlive) continue;
@@ -2743,7 +2744,7 @@ void PhysicsEngine::tickSnapshots(VoxelOctree& world) {
             for (int z = 0; z < scanRange; z++) {
                 VoxelData data;
                 if (world.getBlock(x, y, z, data) && data.type != BlockType::AIR) {
-                    snap.voxels[positionHash(x, y, z)] = data;
+                    snap.voxels[posHash(x, y, z)] = data;
                 }
             }
         }
@@ -2764,7 +2765,7 @@ WorldSnapshot PhysicsEngine::saveSnapshot(const VoxelOctree& world) const {
             for (int z = 0; z < scanRange; z++) {
                 VoxelData data;
                 if (world.getBlock(x, y, z, data) && data.type != BlockType::AIR) {
-                    snap.voxels[positionHash(x, y, z)] = data;
+                    snap.voxels[posHash(x, y, z)] = data;
                 }
             }
         }
@@ -2885,7 +2886,9 @@ void PhysicsEngine::triggerExplosion(VoxelOctree& world, int x, int y, int z) {
         p.size = 0.5f;
         p.type = "explosion";
         p.active = true;
-        particles.push_back(p);
+        if (static_cast<int>(particles.size()) < MAX_PARTICLES) {
+            particles.push_back(p);
+        }
     }
 
     processChainReactions(world, x, y, z, power, 0);
@@ -2986,6 +2989,8 @@ void PhysicsEngine::processChainReactions(VoxelOctree& world, int x, int y, int 
 }
 
 void PhysicsEngine::processPredatorPrey(VoxelOctree& world, float dt) {
+    std::vector<Agent> newAgents;
+
     for (auto& agent : agents) {
         if (!agent.isAlive) continue;
 
@@ -3004,12 +3009,16 @@ void PhysicsEngine::processPredatorPrey(VoxelOctree& world, float dt) {
         if (agent.isPrey) {
             agent.reproductionTimer += dt;
             fleePrey(world, agent, dt);
-            reproducePrey(world, agent, dt);
+            reproducePrey(world, agent, dt, newAgents);
         }
 
         if (agent.attackCooldown > 0.0f) {
             agent.attackCooldown -= dt;
         }
+    }
+
+    for (auto& na : newAgents) {
+        addAgent(na);
     }
 }
 
@@ -3104,11 +3113,11 @@ void PhysicsEngine::fleePrey(VoxelOctree& world, Agent& prey, float dt) {
     }
 }
 
-void PhysicsEngine::reproducePrey(VoxelOctree& world, Agent& prey, float dt) {
+void PhysicsEngine::reproducePrey(VoxelOctree& world, Agent& prey, float dt, std::vector<Agent>& newAgents) {
     if (prey.reproductionTimer < prey.reproductionInterval) return;
     if (prey.health < prey.maxHealth * 0.8f) return;
     if (prey.energy < prey.maxEnergy * 0.5f) return;
-    if (static_cast<int>(agents.size()) >= MAX_AGENTS) return;
+    if (static_cast<int>(agents.size() + newAgents.size()) >= MAX_AGENTS) return;
 
     bool hasNearbyPrey = false;
     for (const auto& other : agents) {
@@ -3145,7 +3154,7 @@ void PhysicsEngine::reproducePrey(VoxelOctree& world, Agent& prey, float dt) {
     child.hungerRate = prey.hungerRate;
     child.reproductionInterval = prey.reproductionInterval;
 
-    addAgent(child);
+    newAgents.push_back(child);
     prey.reproductionTimer = 0.0f;
     prey.energy -= 15.0f;
     prey.health -= 5.0f;
@@ -3305,63 +3314,77 @@ float PhysicsEngine::getDaylightFactor() const {
     return std::max(0.05f, intensity);
 }
 
+static Weather getWeatherPreset(WeatherType type) {
+    Weather w;
+    switch (type) {
+        case WeatherType::CLEAR:
+            w.precipitationRate = 0.0f;
+            w.windSpeedX = 0.5f;
+            w.windSpeedY = 0.0f;
+            w.windSpeedZ = 0.3f;
+            w.visibility = 1.0f;
+            w.temperatureOffset = 0.0f;
+            w.lightningChance = 0.0f;
+            w.humidity = 0.3f;
+            break;
+        case WeatherType::RAIN:
+            w.precipitationRate = 5.0f;
+            w.windSpeedX = 2.0f;
+            w.windSpeedY = 0.0f;
+            w.windSpeedZ = 1.0f;
+            w.visibility = 0.6f;
+            w.temperatureOffset = -3.0f;
+            w.lightningChance = 0.0f;
+            w.humidity = 0.9f;
+            break;
+        case WeatherType::SNOW:
+            w.precipitationRate = 3.0f;
+            w.windSpeedX = 1.0f;
+            w.windSpeedY = 0.0f;
+            w.windSpeedZ = 0.5f;
+            w.visibility = 0.5f;
+            w.temperatureOffset = -10.0f;
+            w.lightningChance = 0.0f;
+            w.humidity = 0.7f;
+            break;
+        case WeatherType::STORM:
+            w.precipitationRate = 10.0f;
+            w.windSpeedX = 8.0f;
+            w.windSpeedY = 0.0f;
+            w.windSpeedZ = 4.0f;
+            w.visibility = 0.3f;
+            w.temperatureOffset = -5.0f;
+            w.lightningChance = 0.1f;
+            w.humidity = 0.95f;
+            break;
+        case WeatherType::FOG:
+            w.precipitationRate = 0.5f;
+            w.windSpeedX = 0.2f;
+            w.windSpeedY = 0.0f;
+            w.windSpeedZ = 0.1f;
+            w.visibility = 0.2f;
+            w.temperatureOffset = -1.0f;
+            w.lightningChance = 0.0f;
+            w.humidity = 0.95f;
+            break;
+    }
+    return w;
+}
+
 void PhysicsEngine::setWeather(WeatherType type) {
     currentWeather.previousType = currentWeather.type;
     currentWeather.type = type;
     currentWeather.transitionTimer = currentWeather.transitionDuration;
 
-    switch (type) {
-        case WeatherType::CLEAR:
-            currentWeather.precipitationRate = 0.0f;
-            currentWeather.windSpeedX = 0.5f;
-            currentWeather.windSpeedY = 0.0f;
-            currentWeather.windSpeedZ = 0.3f;
-            currentWeather.visibility = 1.0f;
-            currentWeather.temperatureOffset = 0.0f;
-            currentWeather.lightningChance = 0.0f;
-            currentWeather.humidity = 0.3f;
-            break;
-        case WeatherType::RAIN:
-            currentWeather.precipitationRate = 5.0f;
-            currentWeather.windSpeedX = 2.0f;
-            currentWeather.windSpeedY = 0.0f;
-            currentWeather.windSpeedZ = 1.0f;
-            currentWeather.visibility = 0.6f;
-            currentWeather.temperatureOffset = -3.0f;
-            currentWeather.lightningChance = 0.0f;
-            currentWeather.humidity = 0.9f;
-            break;
-        case WeatherType::SNOW:
-            currentWeather.precipitationRate = 3.0f;
-            currentWeather.windSpeedX = 1.0f;
-            currentWeather.windSpeedY = 0.0f;
-            currentWeather.windSpeedZ = 0.5f;
-            currentWeather.visibility = 0.5f;
-            currentWeather.temperatureOffset = -10.0f;
-            currentWeather.lightningChance = 0.0f;
-            currentWeather.humidity = 0.7f;
-            break;
-        case WeatherType::STORM:
-            currentWeather.precipitationRate = 10.0f;
-            currentWeather.windSpeedX = 8.0f;
-            currentWeather.windSpeedY = 0.0f;
-            currentWeather.windSpeedZ = 4.0f;
-            currentWeather.visibility = 0.3f;
-            currentWeather.temperatureOffset = -5.0f;
-            currentWeather.lightningChance = 0.1f;
-            currentWeather.humidity = 0.95f;
-            break;
-        case WeatherType::FOG:
-            currentWeather.precipitationRate = 0.5f;
-            currentWeather.windSpeedX = 0.2f;
-            currentWeather.windSpeedY = 0.0f;
-            currentWeather.windSpeedZ = 0.1f;
-            currentWeather.visibility = 0.2f;
-            currentWeather.temperatureOffset = -1.0f;
-            currentWeather.lightningChance = 0.0f;
-            currentWeather.humidity = 0.95f;
-            break;
-    }
+    Weather preset = getWeatherPreset(type);
+    currentWeather.precipitationRate = preset.precipitationRate;
+    currentWeather.windSpeedX = preset.windSpeedX;
+    currentWeather.windSpeedY = preset.windSpeedY;
+    currentWeather.windSpeedZ = preset.windSpeedZ;
+    currentWeather.visibility = preset.visibility;
+    currentWeather.temperatureOffset = preset.temperatureOffset;
+    currentWeather.lightningChance = preset.lightningChance;
+    currentWeather.humidity = preset.humidity;
 }
 
 WeatherType PhysicsEngine::getWeatherType() const {
@@ -3414,59 +3437,7 @@ void PhysicsEngine::transitionWeather(float dt) {
     currentWeather.transitionTimer += dt;
     float t = std::min(1.0f, currentWeather.transitionTimer / currentWeather.transitionDuration);
 
-    Weather target;
-    switch (currentWeather.type) {
-        case WeatherType::CLEAR:
-            target.precipitationRate = 0.0f;
-            target.windSpeedX = 0.5f;
-            target.windSpeedY = 0.0f;
-            target.windSpeedZ = 0.3f;
-            target.visibility = 1.0f;
-            target.temperatureOffset = 0.0f;
-            target.lightningChance = 0.0f;
-            target.humidity = 0.3f;
-            break;
-        case WeatherType::RAIN:
-            target.precipitationRate = 5.0f;
-            target.windSpeedX = 2.0f;
-            target.windSpeedY = 0.0f;
-            target.windSpeedZ = 1.0f;
-            target.visibility = 0.6f;
-            target.temperatureOffset = -3.0f;
-            target.lightningChance = 0.0f;
-            target.humidity = 0.9f;
-            break;
-        case WeatherType::SNOW:
-            target.precipitationRate = 3.0f;
-            target.windSpeedX = 1.0f;
-            target.windSpeedY = 0.0f;
-            target.windSpeedZ = 0.5f;
-            target.visibility = 0.5f;
-            target.temperatureOffset = -10.0f;
-            target.lightningChance = 0.0f;
-            target.humidity = 0.7f;
-            break;
-        case WeatherType::STORM:
-            target.precipitationRate = 10.0f;
-            target.windSpeedX = 8.0f;
-            target.windSpeedY = 0.0f;
-            target.windSpeedZ = 4.0f;
-            target.visibility = 0.3f;
-            target.temperatureOffset = -5.0f;
-            target.lightningChance = 0.1f;
-            target.humidity = 0.95f;
-            break;
-        case WeatherType::FOG:
-            target.precipitationRate = 0.5f;
-            target.windSpeedX = 0.2f;
-            target.windSpeedY = 0.0f;
-            target.windSpeedZ = 0.1f;
-            target.visibility = 0.2f;
-            target.temperatureOffset = -1.0f;
-            target.lightningChance = 0.0f;
-            target.humidity = 0.95f;
-            break;
-    }
+    Weather target = getWeatherPreset(currentWeather.type);
 
     currentWeather.precipitationRate = currentWeather.prevPrecipitationRate +
         (target.precipitationRate - currentWeather.prevPrecipitationRate) * t;
@@ -3659,7 +3630,6 @@ void PhysicsEngine::processWeatherAccumulation(VoxelOctree& world, float dt) {
                         wetProps.biological.waterRequirement = 0.0f;
                         world.setBlock(x, y, z, data.type, wetProps);
                     }
-                    break;
                 }
             }
         }
@@ -3686,7 +3656,6 @@ void PhysicsEngine::processWeatherAccumulation(VoxelOctree& world, float dt) {
                         }
                         break;
                     }
-                    break;
                 }
             }
         }

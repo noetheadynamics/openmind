@@ -123,6 +123,13 @@ class PlayerEntitySystem {
     removeEntity(peerId) {
         const entity = this.entities.get(peerId);
         if (entity) {
+            if (entity._bubbleTimeout) { clearTimeout(entity._bubbleTimeout); entity._bubbleTimeout = null; }
+            if (entity._bubbleSprite) {
+                this.scene.remove(entity._bubbleSprite);
+                if (entity._bubbleSprite.material.map) entity._bubbleSprite.material.map.dispose();
+                entity._bubbleSprite.material.dispose();
+                entity._bubbleSprite = null;
+            }
             this.scene.remove(entity.mesh);
             entity.mesh.traverse((child) => {
                 if (child.geometry) child.geometry.dispose();
@@ -198,6 +205,14 @@ class PlayerEntitySystem {
         const entity = this.entities.get(peerId);
         if (!entity) return;
 
+        if (entity._bubbleTimeout) { clearTimeout(entity._bubbleTimeout); entity._bubbleTimeout = null; }
+        if (entity._bubbleSprite) {
+            this.scene.remove(entity._bubbleSprite);
+            entity._bubbleSprite.material.map.dispose();
+            entity._bubbleSprite.material.dispose();
+            entity._bubbleSprite = null;
+        }
+
         const bubbleCanvas = document.createElement('canvas');
         bubbleCanvas.width = 512;
         bubbleCanvas.height = 128;
@@ -226,11 +241,15 @@ class PlayerEntitySystem {
         bubble.scale.set(4, 1, 1);
         this.scene.add(bubble);
 
-        setTimeout(() => {
+        entity._bubbleSprite = bubble;
+        const bubbleTimeout = setTimeout(() => {
             this.scene.remove(bubble);
             bubble.material.map.dispose();
             bubble.material.dispose();
+            if (entity._bubbleSprite === bubble) entity._bubbleSprite = null;
+            if (entity._bubbleTimeout === bubbleTimeout) entity._bubbleTimeout = null;
         }, 5000);
+        entity._bubbleTimeout = bubbleTimeout;
     }
 
     _wrapText(text, maxChars) {

@@ -31,6 +31,7 @@ std::string OllamaClient::buildRequestBody(const std::string& prompt, const std:
             if (c == '"') json << "\\\"";
             else if (c == '\\') json << "\\\\";
             else if (c == '\n') json << "\\n";
+            else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
             else json << c;
         }
         json << "\"},";
@@ -41,6 +42,7 @@ std::string OllamaClient::buildRequestBody(const std::string& prompt, const std:
         if (c == '"') json << "\\\"";
         else if (c == '\\') json << "\\\\";
         else if (c == '\n') json << "\\n";
+        else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
         else json << c;
     }
     json << "\"}]}";

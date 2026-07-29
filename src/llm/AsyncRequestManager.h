@@ -76,6 +76,7 @@ private:
     void recordRequestTime();
 
     std::map<LLMProvider, std::shared_ptr<LLMInterface>> clients;
+    std::mutex clientsMutex;
     std::vector<AsyncRequest> requestQueue;
     std::map<std::string, AsyncResponse> responses;
 

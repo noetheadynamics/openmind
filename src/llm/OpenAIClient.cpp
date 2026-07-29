@@ -31,6 +31,7 @@ std::string OpenAIClient::buildRequestBody(const std::string& prompt, const std:
             else if (c == '\n') json << "\\n";
             else if (c == '\r') json << "\\r";
             else if (c == '\t') json << "\\t";
+            else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
             else json << c;
         }
         json << "\"},";
@@ -43,6 +44,7 @@ std::string OpenAIClient::buildRequestBody(const std::string& prompt, const std:
         else if (c == '\n') json << "\\n";
         else if (c == '\r') json << "\\r";
         else if (c == '\t') json << "\\t";
+        else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
         else json << c;
     }
     json << "\"}";

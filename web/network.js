@@ -72,7 +72,7 @@ class NetworkManager {
                     const msg = JSON.parse(event.data);
                     this.handleSignalingMessage(msg);
                 } catch (e) {
-                    console.error('[NET] Failed to parse signaling message:', e);
+                    if (this.onError) this.onError('Failed to parse signaling message');
                 }
             };
 
@@ -81,11 +81,9 @@ class NetworkManager {
             };
 
             this.ws.onerror = (err) => {
-                console.error('[NET] Signaling error:', err);
                 if (this.onError) this.onError('Signaling server unavailable. Running in offline mode.');
             };
         } catch (e) {
-            console.error('[NET] Failed to connect signaling:', e);
             if (this.onError) this.onError('Could not reach signaling server');
         }
     }
@@ -128,7 +126,6 @@ class NetworkManager {
                 this.roomCode = msg.roomCode;
                 break;
             case 'error':
-                console.error('[NET] Signaling error:', msg.message);
                 if (this.onError) this.onError(msg.message);
                 break;
         }
@@ -322,7 +319,7 @@ class NetworkManager {
                     break;
             }
         } catch (e) {
-            console.error('[NET] Failed to parse message:', e);
+            if (this.onError) this.onError('Failed to parse peer message');
         }
     }
 
@@ -396,7 +393,7 @@ class NetworkManager {
                 try {
                     channel.send(data);
                 } catch (e) {
-                    console.error('[NET] Broadcast error:', e);
+                    if (this.onError) this.onError('Broadcast failed');
                 }
             }
         });

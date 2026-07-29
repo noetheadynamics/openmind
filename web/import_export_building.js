@@ -77,13 +77,17 @@
         }
 
         async exportFile(data, filename, type) {
-            const blob = new Blob([data], { type: type || 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
+            if (typeof OMUtils !== 'undefined') {
+                OMUtils.downloadBlob(data, filename, type || 'text/plain');
+            } else {
+                const blob = new Blob([data], { type: type || 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
             this.emit('export', { filename, size: data.length });
         }
 

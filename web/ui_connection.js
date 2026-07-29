@@ -83,7 +83,7 @@ class EngineConnection {
 
     getBlock(x, y, z) {
         const json = this.call('getBlockData', 'string', ['number','number','number'], [x, y, z]);
-        try { return JSON.parse(json); } catch (e) { console.warn('getBlock parse error:', e); return null; }
+        try { return JSON.parse(json); } catch (e) { return null; }
     }
 
     removeBlock(x, y, z) {
@@ -103,7 +103,7 @@ class EngineConnection {
     setWeather(type) { this.call('setWeather', null, ['number'], [type]); }
     getWeather() {
         const json = this.call('getWeather', 'string', [], []);
-        try { return JSON.parse(json); } catch (e) { console.warn('getWeather parse error:', e); return { type: 0, visibility: 1 }; }
+        try { return JSON.parse(json); } catch (e) { return { type: 0, visibility: 1 }; }
     }
     getWeatherType() { return this.call('getWeatherType', 'number', [], []) || 0; }
 

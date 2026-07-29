@@ -196,7 +196,7 @@ private:
     void handleBoiling(VoxelOctree& world, int x, int y, int z);
     void expandGas(VoxelOctree& world, int x, int y, int z, const MaterialProps& gasProps);
     void handleCondensation(VoxelOctree& world, int x, int y, int z);
-    void contractGas(VoxelOctree& world, int x, int y, int z);
+    void removeAdjacentGas(VoxelOctree& world, int x, int y, int z);
     void emitRadiation(VoxelOctree& world, int x, int y, int z, const PhysicsData& pd, float dt);
     void propagateRadiation(VoxelOctree& world, float dt);
     void absorbRadiation(VoxelOctree& world, int x, int y, int z, float intensity, float dt);
@@ -245,7 +245,7 @@ private:
     void processPredatorPrey(VoxelOctree& world, float dt);
     void huntPredator(VoxelOctree& world, Agent& predator, float dt);
     void fleePrey(VoxelOctree& world, Agent& prey, float dt);
-    void reproducePrey(VoxelOctree& world, Agent& prey, float dt);
+    void reproducePrey(VoxelOctree& world, Agent& prey, float dt, std::vector<Agent>& newAgents);
 
     void processMetabolism(VoxelOctree& world, float dt);
     void consumeFood(VoxelOctree& world, Agent& agent, float dt);

@@ -122,7 +122,6 @@
                     try {
                         await step.fn();
                     } catch (e) {
-                        console.error('[Loading] Step failed:', step.name, e);
                         this.setStep('Error: ' + step.name, progress, e.message);
                         return false;
                     }

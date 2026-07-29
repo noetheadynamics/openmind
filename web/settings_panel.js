@@ -51,7 +51,7 @@
         }
 
         save() {
-            try { localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); } catch (e) { console.warn('[Settings] Failed to save:', e); }
+            try { localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); } catch (e) { /* settings save failed */ }
         }
 
         load() {
@@ -61,7 +61,7 @@
                     const parsed = JSON.parse(data);
                     this.settings = this._deepMerge(JSON.parse(JSON.stringify(DefaultSettings)), parsed);
                 }
-            } catch (e) { console.warn('[Settings] Failed to load:', e); }
+            } catch (e) { /* settings load failed */ }
         }
 
         _deepMerge(target, source) {
@@ -159,23 +159,27 @@
         }
 
         section(title, items) {
-            return `<div style="background:var(--bg-alt);border-radius:8px;padding:8px"><div style="color:#8b5cf6;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${title}</div>${items.join('')}</div>`;
+            const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+            return `<div style="background:var(--bg-alt);border-radius:8px;padding:8px"><div style="color:#8b5cf6;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${esc(title)}</div>${items.join('')}</div>`;
         }
 
         toggle(label, key, value, onChange) {
             const id = 'set_' + key.replace(/\./g, '_');
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px"><span style="color:var(--text)">${label}</span><button class="settings-toggle" id="${id}" style="padding:3px 10px;border:1px solid var(--border);border-radius:6px;background:${value ? 'rgba(139,92,246,0.3)' : 'var(--bg)'};color:${value ? '#e0e0e0' : 'var(--text-dim)'};cursor:pointer;font-size:11px;min-width:40px">${value ? 'ON' : 'OFF'}</button></div>`;
+            const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px"><span style="color:var(--text)">${esc(label)}</span><button class="settings-toggle" id="${esc(id)}" style="padding:3px 10px;border:1px solid var(--border);border-radius:6px;background:${value ? 'rgba(139,92,246,0.3)' : 'var(--bg)'};color:${value ? '#e0e0e0' : 'var(--text-dim)'};cursor:pointer;font-size:11px;min-width:40px">${value ? 'ON' : 'OFF'}</button></div>`;
         }
 
         slider(label, key, min, max, step, value, onChange) {
             const id = 'set_' + key.replace(/\./g, '_');
-            return `<div style="padding:4px 0;font-size:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text)">${label}</span><span style="color:#60a5fa;font-size:11px" id="${id}_val">${value}</span></div><input type="range" class="settings-slider" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" style="width:100%"></div>`;
+            const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+            return `<div style="padding:4px 0;font-size:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text)">${esc(label)}</span><span style="color:#60a5fa;font-size:11px" id="${esc(id)}_val">${value}</span></div><input type="range" class="settings-slider" id="${esc(id)}" min="${min}" max="${max}" step="${step}" value="${value}" style="width:100%"></div>`;
         }
 
         select(label, key, options, value, onChange) {
             const id = 'set_' + key.replace(/\./g, '_');
-            const opts = Object.entries(options).map(([k, v]) => `<option value="${k}" ${k === value ? 'selected' : ''}>${v}</option>`).join('');
-            return `<div style="padding:4px 0;font-size:12px"><div style="color:var(--text);margin-bottom:4px">${label}</div><select class="settings-select" id="${id}" style="width:100%;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px">${opts}</select></div>`;
+            const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+            const opts = Object.entries(options).map(([k, v]) => `<option value="${esc(k)}" ${k === value ? 'selected' : ''}>${esc(v)}</option>`).join('');
+            return `<div style="padding:4px 0;font-size:12px"><div style="color:var(--text);margin-bottom:4px">${esc(label)}</div><select class="settings-select" id="${esc(id)}" style="width:100%;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px">${opts}</select></div>`;
         }
 
         bindUI(container) {

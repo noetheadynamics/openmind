@@ -145,6 +145,11 @@ class ChatSystem {
     showNotification(playerName, text, color) {
         if (this.isOpen) return;
 
+        const safeColor = (typeof OMUtils !== 'undefined')
+            ? OMUtils.safeHexColor(color, '#8b5cf6')
+            : ((typeof color === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) ? color : '#8b5cf6');
+        const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+
         let notif = document.getElementById('chat-notification');
         if (!notif) {
             notif = document.createElement('div');
@@ -153,8 +158,8 @@ class ChatSystem {
             document.body.appendChild(notif);
         }
 
-        notif.innerHTML = '<div style="color:' + (color || '#8b5cf6') + ';font-weight:bold;margin-bottom:2px">' + this._escapeHtml(playerName) + '</div>' +
-            '<div style="color:#e0e0e0">' + this._escapeHtml(text) + '</div>';
+        notif.innerHTML = '<div style="color:' + safeColor + ';font-weight:bold;margin-bottom:2px">' + esc(playerName) + '</div>' +
+            '<div style="color:#e0e0e0">' + esc(text) + '</div>';
         notif.style.display = 'block';
 
         clearTimeout(this._notifTimer);

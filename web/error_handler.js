@@ -83,17 +83,18 @@
                 this.overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px)';
                 if (document.body) document.body.appendChild(this.overlay);
             }
+            const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
             this.overlay.innerHTML = `
                 <div style="background:var(--bg-card,rgba(15,15,35,0.95));border:1px solid var(--border,rgba(100,100,200,0.3));border-radius:16px;padding:24px;max-width:420px;width:90%;text-align:center">
                     <div style="font-size:24px;margin-bottom:8px;color:var(--error,#ef4444)">⚠</div>
-                    <h3 style="color:var(--text,#e0e0e0);margin-bottom:8px;font-size:16px">${entry.title}</h3>
-                    <p style="color:var(--text-dim,#94a3b8);font-size:13px;margin-bottom:16px">${entry.userMessage}</p>
+                    <h3 style="color:var(--text,#e0e0e0);margin-bottom:8px;font-size:16px">${esc(entry.title)}</h3>
+                    <p style="color:var(--text-dim,#94a3b8);font-size:13px;margin-bottom:16px">${esc(entry.userMessage)}</p>
                     <div style="display:flex;gap:8px;justify-content:center">
                         ${entry.recoverable ? `<button id="errorRetry" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">Retry</button>` : ''}
                         <button id="errorReload" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">Reload</button>
                         <button id="errorDismiss" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer;font-size:12px">Dismiss</button>
                     </div>
-                    <div style="margin-top:12px;font-size:10px;color:var(--text-dim)">Error ID: ${entry.id}</div>
+                    <div style="margin-top:12px;font-size:10px;color:var(--text-dim)">Error ID: ${esc(entry.id)}</div>
                 </div>
             `;
             this.overlay.style.display = 'flex';

@@ -41,7 +41,7 @@ public:
                     VoxelData vd;
                     if (world->getBlock(bx, by, bz, vd) && vd.occupied) {
                         int idx = (int)vd.type;
-                        if (idx >= 0 && idx < 19) blockCount[idx]++;
+                        if (idx >= 0 && idx < static_cast<int>(sizeof(blockNames)/sizeof(blockNames[0]))) blockCount[idx]++;
                         obs.visibleBlocks.push_back({bx, by, bz});
                     }
                 }
@@ -50,7 +50,7 @@ public:
 
         std::ostringstream desc;
         bool first = true;
-        for (int i = 1; i < 19; i++) {
+        for (int i = 1; i < static_cast<int>(sizeof(blockNames)/sizeof(blockNames[0])); i++) {
             if (blockCount[i] > 0) {
                 if (!first) desc << ", ";
                 desc << blockCount[i] << " " << blockNames[i] << " blocks";

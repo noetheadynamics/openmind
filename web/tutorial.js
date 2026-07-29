@@ -85,6 +85,7 @@
             this.tooltip = null;
             this.storageKey = 'openmind_tutorial';
             this.listeners = [];
+            this._activeKeyHandler = null;
             this.loadProgress();
         }
 
@@ -199,6 +200,10 @@
 
         setupAction(step) {
             if (!step.action) return;
+            if (this._activeKeyHandler) {
+                document.removeEventListener('keydown', this._activeKeyHandler);
+                this._activeKeyHandler = null;
+            }
             const handler = (e) => {
                 let proceed = false;
                 switch (step.action) {
@@ -218,9 +223,11 @@
                 }
                 if (proceed) {
                     document.removeEventListener('keydown', handler);
+                    this._activeKeyHandler = null;
                     setTimeout(() => this.nextStep(), 300);
                 }
             };
+            this._activeKeyHandler = handler;
             document.addEventListener('keydown', handler);
         }
 
@@ -240,6 +247,10 @@
         removeUI() {
             if (this.overlay) { this.overlay.remove(); this.overlay = null; }
             if (this.tooltip) { this.tooltip.remove(); this.tooltip = null; }
+            if (this._activeKeyHandler) {
+                document.removeEventListener('keydown', this._activeKeyHandler);
+                this._activeKeyHandler = null;
+            }
         }
 
         saveProgress() {

@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_map>
 #include <cstdint>
+#include <cctype>
 
 namespace OpenMind {
 

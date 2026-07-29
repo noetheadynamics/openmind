@@ -244,6 +244,7 @@ int setOverlay(const char* typePtr, int enabled) {
 EMSCRIPTEN_KEEPALIVE
 const char* saveWorld() {
     static std::string result;
+    std::lock_guard<std::mutex> lock(g_mutex);
     if (!g_world) { result = "{}"; return result.c_str(); }
     result = "{\"blocks\":[";
     bool first = true;

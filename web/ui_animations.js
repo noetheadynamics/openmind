@@ -7,11 +7,23 @@
 
     const UIAnimations = {
         reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false,
+        _mediaQuery: null,
+        _mediaHandler: null,
 
         init() {
-            window.matchMedia?.('(prefers-reduced-motion: reduce)').addEventListener('change', e => {
-                this.reduceMotion = e.matches;
-            });
+            this._mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+            if (this._mediaQuery) {
+                this._mediaHandler = (e) => { this.reduceMotion = e.matches; };
+                this._mediaQuery.addEventListener('change', this._mediaHandler);
+            }
+        },
+
+        destroy() {
+            if (this._mediaQuery && this._mediaHandler) {
+                this._mediaQuery.removeEventListener('change', this._mediaHandler);
+                this._mediaHandler = null;
+                this._mediaQuery = null;
+            }
         },
 
         slideIn(el, dir, duration) {

@@ -37,6 +37,7 @@ std::string OpenAICompatibleClient::buildRequestBody(const std::string& prompt, 
             else if (c == '\n') json << "\\n";
             else if (c == '\r') json << "\\r";
             else if (c == '\t') json << "\\t";
+            else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
             else json << c;
         }
         json << "\"},";
@@ -49,6 +50,7 @@ std::string OpenAICompatibleClient::buildRequestBody(const std::string& prompt, 
         else if (c == '\n') json << "\\n";
         else if (c == '\r') json << "\\r";
         else if (c == '\t') json << "\\t";
+        else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
         else json << c;
     }
     json << "\"}";

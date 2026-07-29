@@ -1,11 +1,16 @@
 @echo off
 setlocal
 
-set EMSDK_DIR=C:\Users\USER\Documents\emsdk
+if defined EMSDK (
+    set EMSDK_DIR=%EMSDK%
+) else (
+    set EMSDK_DIR=%USERPROFILE%\Documents\emsdk
+)
 set PROJECT_DIR=%~dp0..
 set OUT_DIR=%PROJECT_DIR%\build\wasm
 
 call "%EMSDK_DIR%\emsdk_env.bat" >nul 2>&1
+if %ERRORLEVEL% neq 0 (echo ERROR: emsdk_env.bat not found. Install emsdk first. & exit /b 1)
 
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
@@ -20,7 +25,14 @@ emcc -O3 -std=c++17 ^
     "%SRC_DIR%\engine\VoxelOctree.cpp" ^
     "%SRC_DIR%\engine\PhysicsEngine.cpp" ^
     "%SRC_DIR%\engine\openmind_engine.cpp" ^
+    "%SRC_DIR%\llm\HttpClient.cpp" ^
+    "%SRC_DIR%\llm\OpenAIClient.cpp" ^
+    "%SRC_DIR%\llm\AnthropicClient.cpp" ^
+    "%SRC_DIR%\llm\GoogleClient.cpp" ^
+    "%SRC_DIR%\llm\OllamaClient.cpp" ^
+    "%SRC_DIR%\llm\OpenAICompatibleClient.cpp" ^
     "%SRC_DIR%\llm\JSONValidator.cpp" ^
+    "%SRC_DIR%\llm\AsyncRequestManager.cpp" ^
     "%SRC_DIR%\bridge\openmind_bridge.cpp" ^
     -I"%SRC_DIR%\engine" ^
     -I"%SRC_DIR%\llm" ^

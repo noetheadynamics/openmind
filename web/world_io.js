@@ -159,14 +159,18 @@ class WorldIO {
         };
 
         const blob = new Blob([JSON.stringify(omw)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (name || 'world') + '.omw';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        if (typeof OMUtils !== 'undefined') {
+            OMUtils.downloadBlob(JSON.stringify(omw), (name || 'world') + '.omw', 'application/json');
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (name || 'world') + '.omw';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
 
         return { success: true, blocks: blocks.length };
     }

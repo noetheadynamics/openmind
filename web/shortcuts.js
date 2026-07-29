@@ -126,10 +126,11 @@
                 categories[s.category].push({ key, ...s });
             }
             let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="color:#e0e0e0;font-size:16px">Keyboard Shortcuts</h3><button id="closeShortcuts" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px">✕</button></div>';
+            const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
             for (const [cat, items] of Object.entries(categories)) {
-                html += `<div style="margin-bottom:12px"><div style="color:#8b5cf6;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${cat}</div>`;
+                html += `<div style="margin-bottom:12px"><div style="color:#8b5cf6;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${esc(cat)}</div>`;
                 for (const item of items) {
-                    html += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(100,100,200,0.1);font-size:12px"><span style="color:#94a3b8">${item.description}</span><kbd style="background:rgba(30,30,60,0.8);border:1px solid rgba(100,100,200,0.3);border-radius:4px;padding:2px 6px;color:#e0e0e0;font-family:monospace;font-size:11px">${item.key}</kbd></div>`;
+                    html += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(100,100,200,0.1);font-size:12px"><span style="color:#94a3b8">${esc(item.description)}</span><kbd style="background:rgba(30,30,60,0.8);border:1px solid rgba(100,100,200,0.3);border-radius:4px;padding:2px 6px;color:#e0e0e0;font-family:monospace;font-size:11px">${esc(item.key)}</kbd></div>`;
                 }
                 html += '</div>';
             }

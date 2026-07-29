@@ -1,4 +1,4 @@
-const DAY_LENGTH = 36000;
+const DAY_LENGTH = (typeof OMUtils !== 'undefined') ? OMUtils.DAY_LENGTH : 36000;
 
 class LiveStats {
     constructor() {
@@ -99,12 +99,14 @@ class LiveStats {
     }
 
     formatTime(h) {
+        if (typeof OMUtils !== 'undefined') return OMUtils.formatTime(h);
         const hh = Math.floor(h) % 24;
         const mm = Math.floor((h - Math.floor(h)) * 60);
         return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
     }
 
     formatTimeFull(h) {
+        if (typeof OMUtils !== 'undefined') return OMUtils.formatTimeFull(h);
         const hh = Math.floor(h) % 24;
         const mm = Math.floor((h - Math.floor(h)) * 60);
         const ss = Math.floor(((h * 60) % 1) * 60);

@@ -130,7 +130,8 @@ class MultiplayerUI {
 
     renderHosting() {
         if (!this.container) return;
-        const code = this.roomCode || '------';
+        const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+        const code = esc(this.roomCode || '------');
         this.container.innerHTML = `
             <div class="mp-container">
                 <div class="mp-room-code">${code}</div>
@@ -149,11 +150,12 @@ class MultiplayerUI {
 
     renderJoining() {
         if (!this.container) return;
+        const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
         this.container.innerHTML = `
             <div class="mp-container">
                 <div style="text-align:center;padding:20px;color:#eab308">Connecting...</div>
                 <div class="mp-stats" id="mp-stats">
-                    <span>Room: ${this.roomCode}</span>
+                    <span>Room: ${esc(this.roomCode)}</span>
                     <span id="mp-latency">0ms</span>
                 </div>
                 <div class="mp-player-list" id="mp-player-list"></div>
@@ -167,7 +169,8 @@ class MultiplayerUI {
 
     renderConnected() {
         if (!this.container) return;
-        const code = this.roomCode || '------';
+        const esc = (typeof OMUtils !== 'undefined') ? OMUtils.escapeHtml : (s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+        const code = esc(this.roomCode || '------');
         this.container.innerHTML = `
             <div class="mp-container">
                 <div class="mp-room-code">${code}</div>

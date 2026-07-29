@@ -10,7 +10,7 @@
 
 namespace OpenMind {
 
-static int safeStoi(const std::string& s, int def = 0) {
+inline int safeStoi(const std::string& s, int def = 0) {
     try { return std::stoi(s); } catch (...) { return def; }
 }
 
@@ -93,13 +93,13 @@ public:
     ToolResult scanInventory(int agentId) {
         ToolResult r;
         r.output = "Inventory not yet implemented";
-        r.success = true;
+        r.success = false;
         return r;
     }
 
     ToolResult talkTo(int fromId, int toId, const std::string& message) {
         ToolResult r;
-        r.success = true;
+        r.success = false;
         r.output = "Message sent to agent " + std::to_string(toId) + ": " + message;
         return r;
     }
@@ -137,7 +137,7 @@ public:
 
     ToolResult craft(const std::string& item) {
         ToolResult r;
-        r.success = true;
+        r.success = false;
         r.output = "Crafted " + item;
         return r;
     }
@@ -173,6 +173,7 @@ public:
             r.output = "Built " + type + " at (" + std::to_string(bx) + "," +
                        std::to_string(by) + "," + std::to_string(bz) + ")";
         } else {
+            r.success = false;
             r.output = "Unknown structure type: " + type;
         }
         return r;

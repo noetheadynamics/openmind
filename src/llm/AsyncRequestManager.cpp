@@ -12,10 +12,11 @@ AsyncRequestManager::~AsyncRequestManager() {
 }
 
 void AsyncRequestManager::initialize(int maxConc, int rateLimit) {
+    std::lock_guard<std::mutex> lock(clientsMutex);
     maxConcurrent = maxConc;
     rateLimitPerMinute = rateLimit;
     running = true;
-    for (int i = 0; i < maxConcurrent; i++) {
+    for (int i = 0; i < maxConc; i++) {
         workers.emplace_back(&AsyncRequestManager::workerThread, this);
     }
 }
@@ -27,9 +28,12 @@ void AsyncRequestManager::shutdown() {
         if (t.joinable()) t.join();
     }
     workers.clear();
+    std::lock_guard<std::mutex> lock(clientsMutex);
+    clients.clear();
 }
 
 void AsyncRequestManager::registerClient(LLMProvider provider, std::shared_ptr<LLMInterface> client) {
+    std::lock_guard<std::mutex> lock(clientsMutex);
     clients[provider] = client;
 }
 
@@ -172,20 +176,25 @@ bool AsyncRequestManager::processRequest(AsyncRequest& request) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    auto clientIt = clients.find(request.provider);
-    if (clientIt == clients.end()) {
-        std::lock_guard<std::mutex> lock(responseMutex);
-        responses[request.id].completed = true;
-        responses[request.id].result.success = false;
-        responses[request.id].result.error = "No client registered for provider";
-        failedCount++;
-        return false;
+    std::shared_ptr<LLMInterface> client;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex);
+        auto clientIt = clients.find(request.provider);
+        if (clientIt == clients.end()) {
+            std::lock_guard<std::mutex> rlock(responseMutex);
+            responses[request.id].completed = true;
+            responses[request.id].result.success = false;
+            responses[request.id].result.error = "No client registered for provider";
+            failedCount++;
+            return false;
+        }
+        client = clientIt->second;
     }
 
     recordRequestTime();
     auto start = std::chrono::steady_clock::now();
 
-    LLMResponse resp = clientIt->second->sendPrompt(request.prompt, request.systemInstruction);
+    LLMResponse resp = client->sendPrompt(request.prompt, request.systemInstruction);
 
     auto elapsed = std::chrono::steady_clock::now() - start;
     float latencyMs = (float)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();

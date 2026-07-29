@@ -37,7 +37,7 @@ emcc -O3 -std=c++17 \
     "$LLM_DIR/AsyncRequestManager.cpp" \
     "$BRIDGE_DIR/openmind_bridge.cpp" \
     -I"$SRC_DIR" -I"$LLM_DIR" -I"$AGENT_DIR" -I"$BRIDGE_DIR" \
-    -s EXPORTED_FUNCTIONS="['_initWorld','_setBlock','_setBlockSimple','_getBlock','_removeBlock','_tickPhysicsDelta','_getWorldStats','_setTimeOfDay','_getTimeOfDay','_getSunlightIntensity','_setCycleDuration','_rewindTime','_setWeather','_getWeather','_setTimeScale','_getAgentCount','_getAgentData','_setAgentPosition','_teleportCamera','_setOverlay','_generateFromPrompt','_exportWorld','_saveWorld']" \
+    -s EXPORTED_FUNCTIONS="['_initWorld','_setBlock','_setBlockSimple','_getBlockData','_removeBlock','_tickPhysics','_tickPhysicsDelta','_getWorldStats','_setTimeOfDay','_getTimeOfDay','_getSunlightIntensity','_setCycleDuration','_rewindTime','_setWeather','_getWeatherType','_getWeather','_setTimeScale','_getAgentCount','_getAgentData','_addAgent','_setAgentPosition','_exportCSV','_exportGLTF','_getLastExportCSV','_getLastExportGLTF','_saveSnapshot','_getPendingFragments','_setGravity','_setAmbientTemperature','_setWind','_cleanup','_getSunPosition','_generateFromPrompt','_teleportCamera','_setOverlay','_saveWorld','_malloc','_free']" \
     -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap']" \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s INITIAL_MEMORY=67108864 \

@@ -117,7 +117,7 @@ class ClientSystem {
             }
 
         } catch (e) {
-            console.error('[CLIENT] Failed to parse world data:', e);
+            // parse error handled silently
         }
     }
 
@@ -148,7 +148,6 @@ class ClientSystem {
     }
 
     handleError(err) {
-        console.error('[CLIENT] Error:', err);
         if (this.onError) this.onError(err);
     }
 

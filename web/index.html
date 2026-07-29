@@ -108,7 +108,7 @@
                     <button class="time-btn" id="ff5m" title="Fast-forward 5 minutes">5m ⏩</button>
                 </div>
                 <div class="speed-slider-row">
-                    <label>Speed</label>
+                    <label for="speedSlider">Speed</label>
                     <input type="range" id="speedSlider" min="0" max="7" value="2" step="1">
                     <span class="speed-label" id="speedLabel">1x</span>
                 </div>
@@ -119,7 +119,7 @@
                     <button class="preset-btn" data-time="18">Sunset</button>
                 </div>
                 <div class="cycle-duration-row">
-                    <label>Cycle Duration</label>
+                    <label for="cycleDurationSlider">Cycle Duration</label>
                     <input type="range" id="cycleDurationSlider" min="60" max="7200" value="600" step="60">
                     <span id="cycleDurationLabel">10 min</span>
                 </div>
@@ -350,9 +350,9 @@
             </div>
             <div class="panel-body">
                 <div class="teleport-inputs">
-                    <div class="coord-input"><label>X</label><input type="number" id="tpX" value="0" step="1"></div>
-                    <div class="coord-input"><label>Y</label><input type="number" id="tpY" value="5" step="1"></div>
-                    <div class="coord-input"><label>Z</label><input type="number" id="tpZ" value="0" step="1"></div>
+                    <div class="coord-input"><label for="tpX">X</label><input type="number" id="tpX" value="0" step="1"></div>
+                    <div class="coord-input"><label for="tpY">Y</label><input type="number" id="tpY" value="5" step="1"></div>
+                    <div class="coord-input"><label for="tpZ">Z</label><input type="number" id="tpZ" value="0" step="1"></div>
                     <button class="action-btn teleport-btn" id="tpGoBtn">Go</button>
                 </div>
                 <div class="teleport-bookmarks">
@@ -576,6 +576,7 @@
         <canvas id="ecoGraphCanvas" width="300" height="150"></canvas>
     </div>
 
+    <script src="utils.js"></script>
     <script src="ui_connection.js"></script>
     <script src="world_io.js"></script>
     <script src="stats.js"></script>

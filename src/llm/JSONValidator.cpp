@@ -162,6 +162,7 @@ std::string JSONValidator::extractJsonFromResponse(const std::string& response) 
         return result;
     }
     if (trimmed.back() == ']') {
+        if (trimmed.front() == '[') return trimmed;
         return "[" + trimmed + "]";
     }
 

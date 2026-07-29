@@ -1,4 +1,4 @@
-const DAY_LENGTH = 36000;
+const DAY_LENGTH = (typeof OMUtils !== 'undefined') ? OMUtils.DAY_LENGTH : 36000;
 
 class OmniConsole {
     constructor() {
@@ -52,6 +52,19 @@ class OmniConsole {
             'Set gravity to Moon levels'
         ];
         this.speedLabels = ['0.1x', '0.25x', '0.5x', '1x', '2x', '5x', '10x', '100x'];
+        this._exportProgressInterval = null;
+        this._simLoopTimeout = null;
+    }
+
+    destroy() {
+        this.stopSimulation();
+        if (this.agentInterval) { clearInterval(this.agentInterval); this.agentInterval = null; }
+        if (this._exportProgressInterval) { clearInterval(this._exportProgressInterval); this._exportProgressInterval = null; }
+        if (this._ecoGraphRaf) { cancelAnimationFrame(this._ecoGraphRaf); this._ecoGraphRaf = null; }
+        if (this.shortcuts) this.shortcuts.destroy();
+        if (this.liveStats) this.liveStats.stop();
+        if (this.worldIO) this.worldIO.stopAutoSave();
+        if (this.tutorial) this.tutorial.removeUI();
     }
 
     async init() {
@@ -115,7 +128,7 @@ class OmniConsole {
                         this.postProcessing.setup();
                     }
                 }
-                try { this.sound.init(); } catch (e) { console.warn('Sound init failed:', e); }
+                try { this.sound.init(); } catch (e) { this.log('Sound init failed: ' + e.message, 'warn'); }
                 this.notifications = new Notifications();
                 this.tutorial = new Tutorial();
                 this.tutorial.on((e) => {
@@ -154,7 +167,7 @@ class OmniConsole {
             }
             this.updateConnectionStatus(ok);
         } catch (e) {
-            console.error('[loadWASM] Initialization error:', e);
+            this.log('[loadWASM] Initialization error: ' + e.message, 'err');
             this.updateConnectionStatus(false);
         } finally {
             if (overlay) overlay.classList.remove('visible');
@@ -179,6 +192,11 @@ class OmniConsole {
         const statsOverlay = document.getElementById('statsOverlay');
         if (statsOverlay) statsOverlay.style.display = '';
         this.simLoop();
+    }
+
+    stopSimulation() {
+        this.engine.simRunning = false;
+        if (this._simLoopTimeout) { clearTimeout(this._simLoopTimeout); this._simLoopTimeout = null; }
     }
 
     simLoop() {
@@ -210,27 +228,36 @@ class OmniConsole {
                 this.lastTickTime = now;
             }
         }
-        setTimeout(() => this.simLoop(), 200);
+        this._simLoopTimeout = setTimeout(() => this.simLoop(), 200);
     }
 
     updateStats() {
-        const el = (id) => document.getElementById(id);
-        if (!el('statBlocks')) return;
+        const statBlocks = document.getElementById('statBlocks');
+        if (!statBlocks) return;
         const s = this.engine.getWorldStats();
-        el('statBlocks').textContent = s.totalBlocks || 0;
-        el('statTick').textContent = s.currentTick || 0;
-        el('statTemp').textContent = (s.averageTemperature || 293.15).toFixed(1) + ' K';
-        el('statFPS').textContent = this.engine.fps;
+        statBlocks.textContent = s.totalBlocks || 0;
+        const statTick = document.getElementById('statTick');
+        if (statTick) statTick.textContent = s.currentTick || 0;
+        const statTemp = document.getElementById('statTemp');
+        if (statTemp) statTemp.textContent = (s.averageTemperature || 293.15).toFixed(1) + ' K';
+        const statFPS = document.getElementById('statFPS');
+        if (statFPS) statFPS.textContent = this.engine.fps;
         const tod = this.engine.getTimeOfDay();
-        el('statTimeOfDay').textContent = this.formatTime(tod);
+        const statTimeOfDay = document.getElementById('statTimeOfDay');
+        if (statTimeOfDay) statTimeOfDay.textContent = this.formatTime(tod);
         const w = this.engine.getWeather();
-        el('statWeather').textContent = this.engine.weatherNames[w.type] || 'CLEAR';
-        el('statEntities').textContent = this.engine.getAgentCount();
-        el('timeDisplay').textContent = this.formatTimeFull(tod);
-        el('tickCount').textContent = 'Tick ' + (s.currentTick || 0);
+        const statWeather = document.getElementById('statWeather');
+        if (statWeather) statWeather.textContent = this.engine.weatherNames[w.type] || 'CLEAR';
+        const statEntities = document.getElementById('statEntities');
+        if (statEntities) statEntities.textContent = this.engine.getAgentCount();
+        const timeDisplay = document.getElementById('timeDisplay');
+        if (timeDisplay) timeDisplay.textContent = this.formatTimeFull(tod);
+        const tickCount = document.getElementById('tickCount');
+        if (tickCount) tickCount.textContent = 'Tick ' + (s.currentTick || 0);
         const ticks = s.currentTick || 0;
         const dayLength = DAY_LENGTH;
-        el('dayCount').textContent = 'Day ' + (Math.floor(ticks / dayLength) + 1);
+        const dayCount = document.getElementById('dayCount');
+        if (dayCount) dayCount.textContent = 'Day ' + (Math.floor(ticks / dayLength) + 1);
     }
 
     formatTime(h) {
@@ -287,6 +314,7 @@ class OmniConsole {
 
     sendPrompt() {
         const input = document.getElementById('promptInput');
+        if (!input) return;
         const text = input.value.trim();
         if (!text) return;
         this.promptHistory.unshift(text);
@@ -464,17 +492,29 @@ class OmniConsole {
         chat.scrollTop = chat.scrollHeight;
     }
 
-    escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    _escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        if (typeof OMUtils !== 'undefined') return OMUtils.escapeHtml(str);
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    _safeHexColor(str, fallback) {
+        if (typeof OMUtils !== 'undefined') return OMUtils.safeHexColor(str, fallback);
+        return (typeof str === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(str)) ? str : (fallback || '#ffffff');
+    }
 
     navigateHistory(dir) {
         if (this.promptHistory.length === 0) return;
         this.historyIndex = Math.max(-1, Math.min(this.historyIndex + dir, this.promptHistory.length - 1));
         const input = document.getElementById('promptInput');
-        input.value = this.historyIndex >= 0 ? this.promptHistory[this.historyIndex] : '';
+        if (input) input.value = this.historyIndex >= 0 ? this.promptHistory[this.historyIndex] : '';
     }
 
     autocomplete() {
         const input = document.getElementById('promptInput');
+        if (!input) return;
         const val = input.value.toLowerCase();
         const match = this.suggestions.find(s => s.toLowerCase().startsWith(val) && s.toLowerCase() !== val);
         if (match) input.value = match;
@@ -500,7 +540,7 @@ class OmniConsole {
     showHistoryDropdown() {
         if (this.promptHistory.length === 0) return;
         const input = document.getElementById('promptInput');
-        input.value = this.promptHistory[0];
+        if (input) input.value = this.promptHistory[0];
     }
 
     /* ====== TIME CONTROLS ====== */
@@ -614,7 +654,8 @@ class OmniConsole {
         const ctx = canvas.getContext('2d');
         const data = { predators: [], prey: [] };
         const draw = () => {
-            if (!this._ecoGraphRunning || document.getElementById('ecoGraphOverlay').style.display === 'none') return;
+            const ecoOverlay = document.getElementById('ecoGraphOverlay');
+            if (!this._ecoGraphRunning || !ecoOverlay || ecoOverlay.style.display === 'none') return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             let predCount = 0, preyCount = 0;
             if (this.engine.wasmReady) {
@@ -670,7 +711,7 @@ class OmniConsole {
             const role = a.isPredator ? 'predator' : (a.isDiseased ? 'diseased' : 'prey');
             const card = document.createElement('div');
             card.className = 'agent-card' + (this.selectedAgent === i ? ' selected' : '');
-            card.innerHTML = `<div class="agent-avatar-sm">${String.fromCharCode(65 + (a.id || i) % 26)}</div><div class="agent-info"><div class="agent-card-name">Agent #${a.id !== undefined ? a.id : i}</div><div class="agent-card-role">${role}</div></div><div class="agent-card-hp">HP:${Math.round(a.health || 0)}</div>`;
+            card.innerHTML = `<div class="agent-avatar-sm">${String.fromCharCode(65 + (a.id || i) % 26)}</div><div class="agent-info"><div class="agent-card-name">Agent #${this._escapeHtml(String(a.id !== undefined ? a.id : i))}</div><div class="agent-card-role">${this._escapeHtml(role)}</div></div><div class="agent-card-hp">HP:${Math.round(a.health || 0)}</div>`;
             card.addEventListener('click', () => this.inspectAgent(i));
             list.appendChild(card);
         }
@@ -680,45 +721,64 @@ class OmniConsole {
         this.selectedAgent = idx;
         const a = this.engine.getAgentData(idx);
         if (!a || !a.exists) return;
-        document.getElementById('agentInspector').style.display = '';
+        const inspector = document.getElementById('agentInspector');
+        if (inspector) inspector.style.display = '';
         const name = 'Agent #' + (a.id !== undefined ? a.id : idx);
         const role = a.isPredator ? 'predator' : (a.isDiseased ? 'diseased' : 'prey');
-        document.getElementById('agentAvatar').textContent = name[0].toUpperCase();
-        document.getElementById('agentName').textContent = name;
-        document.getElementById('agentRole').textContent = role + (a.isAlive ? '' : ' (dead)');
-        document.getElementById('agentHealth').style.width = (a.health || 0) + '%';
-        document.getElementById('agentHealthVal').textContent = Math.round(a.health || 0);
-        document.getElementById('agentHunger').style.width = (a.hunger || 0) + '%';
-        document.getElementById('agentHungerVal').textContent = Math.round(a.hunger || 0);
-        document.getElementById('agentEnergy').style.width = (a.energy || 0) + '%';
-        document.getElementById('agentEnergyVal').textContent = Math.round(a.energy || 0);
-        document.getElementById('agentPosition').textContent = Math.round(a.x||0) + ', ' + Math.round(a.y||0) + ', ' + Math.round(a.z||0);
-        document.getElementById('agentGoal').textContent = a.isAlive ? (a.isPredator ? 'Hunt prey' : 'Find food') : 'Dead';
+        const agentAvatar = document.getElementById('agentAvatar');
+        if (agentAvatar) agentAvatar.textContent = name[0].toUpperCase();
+        const agentName = document.getElementById('agentName');
+        if (agentName) agentName.textContent = name;
+        const agentRole = document.getElementById('agentRole');
+        if (agentRole) agentRole.textContent = role + (a.isAlive ? '' : ' (dead)');
+        const agentHealth = document.getElementById('agentHealth');
+        if (agentHealth) agentHealth.style.width = (a.health || 0) + '%';
+        const agentHealthVal = document.getElementById('agentHealthVal');
+        if (agentHealthVal) agentHealthVal.textContent = Math.round(a.health || 0);
+        const agentHunger = document.getElementById('agentHunger');
+        if (agentHunger) agentHunger.style.width = (a.hunger || 0) + '%';
+        const agentHungerVal = document.getElementById('agentHungerVal');
+        if (agentHungerVal) agentHungerVal.textContent = Math.round(a.hunger || 0);
+        const agentEnergy = document.getElementById('agentEnergy');
+        if (agentEnergy) agentEnergy.style.width = (a.energy || 0) + '%';
+        const agentEnergyVal = document.getElementById('agentEnergyVal');
+        if (agentEnergyVal) agentEnergyVal.textContent = Math.round(a.energy || 0);
+        const agentPosition = document.getElementById('agentPosition');
+        if (agentPosition) agentPosition.textContent = Math.round(a.x||0) + ', ' + Math.round(a.y||0) + ', ' + Math.round(a.z||0);
+        const agentGoal = document.getElementById('agentGoal');
+        if (agentGoal) agentGoal.textContent = a.isAlive ? (a.isPredator ? 'Hunt prey' : 'Find food') : 'Dead';
 
         const memDiv = document.getElementById('agentMemories');
-        memDiv.innerHTML = '';
-        const mems = ['Position: ' + Math.round(a.x||0) + ',' + Math.round(a.y||0) + ',' + Math.round(a.z||0)];
-        if (a.vx || a.vz) mems.push('Velocity: ' + (a.vx||0).toFixed(1) + ',' + (a.vy||0).toFixed(1) + ',' + (a.vz||0).toFixed(1));
-        if (a.isDiseased) mems.push('Status: Diseased');
-        if (!a.isAlive) mems.push('Status: Dead');
-        mems.forEach(m => { const d = document.createElement('div'); d.className = 'memory-entry'; d.textContent = m; memDiv.appendChild(d); });
+        if (memDiv) {
+            memDiv.innerHTML = '';
+            const mems = ['Position: ' + Math.round(a.x||0) + ',' + Math.round(a.y||0) + ',' + Math.round(a.z||0)];
+            if (a.vx || a.vz) mems.push('Velocity: ' + (a.vx||0).toFixed(1) + ',' + (a.vy||0).toFixed(1) + ',' + (a.vz||0).toFixed(1));
+            if (a.isDiseased) mems.push('Status: Diseased');
+            if (!a.isAlive) mems.push('Status: Dead');
+            mems.forEach(m => { const d = document.createElement('div'); d.className = 'memory-entry'; d.textContent = m; memDiv.appendChild(d); });
+        }
 
-        document.getElementById('agentThoughts').textContent = a.isAlive ? (a.isPredator ? 'Looking for prey nearby...' : 'Scanning for food and safety.') : 'No longer active.';
+        const agentThoughts = document.getElementById('agentThoughts');
+        if (agentThoughts) agentThoughts.textContent = a.isAlive ? (a.isPredator ? 'Looking for prey nearby...' : 'Scanning for food and safety.') : 'No longer active.';
 
         const relDiv = document.getElementById('agentRelationships');
-        relDiv.innerHTML = '';
-        const relType = a.isPredator ? 'enemy' : 'friend';
-        const chip = document.createElement('span');
-        chip.className = 'rel-chip ' + relType;
-        chip.textContent = (a.isPredator ? 'Prey' : 'Allies') + ' (' + relType + ')';
-        relDiv.appendChild(chip);
+        if (relDiv) {
+            relDiv.innerHTML = '';
+            const relType = a.isPredator ? 'enemy' : 'friend';
+            const chip = document.createElement('span');
+            chip.className = 'rel-chip ' + relType;
+            chip.textContent = (a.isPredator ? 'Prey' : 'Allies') + ' (' + relType + ')';
+            relDiv.appendChild(chip);
+        }
 
         const invDiv = document.getElementById('agentInventory');
-        invDiv.innerHTML = '';
-        const invChip = document.createElement('span');
-        invChip.className = 'inv-chip';
-        invChip.textContent = a.isPredator ? 'Claws' : 'Food stores';
-        invDiv.appendChild(invChip);
+        if (invDiv) {
+            invDiv.innerHTML = '';
+            const invChip = document.createElement('span');
+            invChip.className = 'inv-chip';
+            invChip.textContent = a.isPredator ? 'Claws' : 'Food stores';
+            invDiv.appendChild(invChip);
+        }
 
         document.querySelectorAll('.agent-card').forEach((c, i) => {
             c.classList.toggle('selected', i === idx);
@@ -733,17 +793,27 @@ class OmniConsole {
                 card.classList.add('active');
                 this.currentEnv = card.dataset.preset;
                 const p = this.engine.envPresets[this.currentEnv];
-                document.getElementById('envCustomSliders').style.display = this.currentEnv === 'custom' ? '' : 'none';
-                document.getElementById('envInfoGravity').textContent = p.gravity + ' m/s²';
-                document.getElementById('envInfoAir').textContent = p.airDensity + ' kg/m³';
-                document.getElementById('envInfoTemp').textContent = p.temperature + ' K';
+                const envCustomSliders = document.getElementById('envCustomSliders');
+                if (envCustomSliders) envCustomSliders.style.display = this.currentEnv === 'custom' ? '' : 'none';
+                const envInfoGravity = document.getElementById('envInfoGravity');
+                if (envInfoGravity) envInfoGravity.textContent = p.gravity + ' m/s²';
+                const envInfoAir = document.getElementById('envInfoAir');
+                if (envInfoAir) envInfoAir.textContent = p.airDensity + ' kg/m³';
+                const envInfoTemp = document.getElementById('envInfoTemp');
+                if (envInfoTemp) envInfoTemp.textContent = p.temperature + ' K';
                 if (this.currentEnv === 'custom') {
-                    document.getElementById('envGravity').value = p.gravity;
-                    document.getElementById('envGravityVal').textContent = p.gravity;
-                    document.getElementById('envAirDensity').value = p.airDensity;
-                    document.getElementById('envAirDensityVal').textContent = p.airDensity;
-                    document.getElementById('envTemp').value = p.temperature;
-                    document.getElementById('envTempVal').textContent = p.temperature.toFixed(1);
+                    const envGravity = document.getElementById('envGravity');
+                    if (envGravity) envGravity.value = p.gravity;
+                    const envGravityVal = document.getElementById('envGravityVal');
+                    if (envGravityVal) envGravityVal.textContent = p.gravity;
+                    const envAirDensity = document.getElementById('envAirDensity');
+                    if (envAirDensity) envAirDensity.value = p.airDensity;
+                    const envAirDensityVal = document.getElementById('envAirDensityVal');
+                    if (envAirDensityVal) envAirDensityVal.textContent = p.airDensity;
+                    const envTemp = document.getElementById('envTemp');
+                    if (envTemp) envTemp.value = p.temperature;
+                    const envTempVal = document.getElementById('envTempVal');
+                    if (envTempVal) envTempVal.textContent = p.temperature.toFixed(1);
                 }
             });
         });
@@ -780,10 +850,13 @@ class OmniConsole {
     }
 
     async generateMaterial() {
-        const input = document.getElementById('forgeInput').value.trim();
+        const forgeInput = document.getElementById('forgeInput');
+        const input = forgeInput ? forgeInput.value.trim() : '';
         if (!input) return;
-        document.getElementById('forgeLoading').style.display = '';
-        document.getElementById('forgeResult').style.display = 'none';
+        const forgeLoading = document.getElementById('forgeLoading');
+        const forgeResult = document.getElementById('forgeResult');
+        if (forgeLoading) forgeLoading.style.display = '';
+        if (forgeResult) forgeResult.style.display = 'none';
         this.addChatMessage('assistant', 'Generating material: ' + input.substring(0, 50) + '...');
 
         if (this.llm.apiKey) {
@@ -843,18 +916,23 @@ class OmniConsole {
     }
 
     showMaterialResult(mat) {
-        document.getElementById('forgeLoading').style.display = 'none';
-        document.getElementById('forgeResult').style.display = '';
-        document.getElementById('materialSwatch').style.background = mat.color;
-        document.getElementById('materialProps').innerHTML = `
+        const forgeLoading = document.getElementById('forgeLoading');
+        const forgeResult = document.getElementById('forgeResult');
+        const materialSwatch = document.getElementById('materialSwatch');
+        const materialProps = document.getElementById('materialProps');
+        const forgeAddBtn = document.getElementById('forgeAddBtn');
+        if (forgeLoading) forgeLoading.style.display = 'none';
+        if (forgeResult) forgeResult.style.display = '';
+        if (materialSwatch) materialSwatch.style.background = this._safeHexColor(mat.color, '#888888');
+        if (materialProps) materialProps.innerHTML = `
             <div class="material-prop"><span>Name</span><span>${this._escapeHtml(mat.name)}</span></div>
-            <div class="material-prop"><span>Mass</span><span>${mat.mass} kg</span></div>
-            <div class="material-prop"><span>Hardness</span><span>${mat.hardness}</span></div>
-            <div class="material-prop"><span>Melting Pt</span><span>${mat.meltingPoint} K</span></div>
-            <div class="material-prop"><span>Density</span><span>${mat.density} kg/m³</span></div>
-            <div class="material-prop"><span>Tensile</span><span>${mat.tensileStrength} MPa</span></div>
+            <div class="material-prop"><span>Mass</span><span>${this._escapeHtml(mat.mass)} kg</span></div>
+            <div class="material-prop"><span>Hardness</span><span>${this._escapeHtml(String(mat.hardness))}</span></div>
+            <div class="material-prop"><span>Melting Pt</span><span>${this._escapeHtml(String(mat.meltingPoint))} K</span></div>
+            <div class="material-prop"><span>Density</span><span>${this._escapeHtml(String(mat.density))} kg/m³</span></div>
+            <div class="material-prop"><span>Tensile</span><span>${this._escapeHtml(String(mat.tensileStrength))} MPa</span></div>
         `;
-        document.getElementById('forgeAddBtn').onclick = () => {
+        if (forgeAddBtn) forgeAddBtn.onclick = () => {
             if (!this.engine.wasmReady) { this.addChatMessage('assistant', 'WASM not connected.'); return; }
             const props = JSON.stringify({
                 mass: parseFloat(mat.mass), density: mat.density, hardness: parseFloat(mat.hardness),
@@ -874,7 +952,7 @@ class OmniConsole {
         this.forgeHistory.forEach(m => {
             const item = document.createElement('div');
             item.className = 'forge-history-item';
-            item.innerHTML = `<div class="forge-history-swatch" style="background:${m.color}"></div><div class="forge-history-name">${this._escapeHtml(m.name)}</div>`;
+            item.innerHTML = `<div class="forge-history-swatch" style="background:${this._safeHexColor(m.color, '#888888')}"></div><div class="forge-history-name">${this._escapeHtml(m.name)}</div>`;
             item.addEventListener('click', () => this.showMaterialResult(m));
             list.appendChild(item);
         });
@@ -888,12 +966,13 @@ class OmniConsole {
                 if (!this.engine.wasmReady) { this.addChatMessage('assistant', 'WASM not connected.'); return; }
                 this.addChatMessage('assistant', 'Exporting as .' + fmt.toUpperCase() + '...');
                 const progress = document.getElementById('exportProgress');
-                progress.style.display = '';
+                if (progress) progress.style.display = '';
+                if (this._exportProgressInterval) clearInterval(this._exportProgressInterval);
                 let pct = 0;
-                const iv = setInterval(() => {
+                this._exportProgressInterval = setInterval(() => {
                     pct += 20;
                     if (pct >= 100) {
-                        pct = 100; clearInterval(iv);
+                        pct = 100; clearInterval(this._exportProgressInterval); this._exportProgressInterval = null;
                         try {
                             if (fmt === 'csv') {
                                 const meta = this.engine.exportCSV('world.csv');
@@ -939,10 +1018,12 @@ class OmniConsole {
                         } catch (e) {
                             this.addChatMessage('assistant', 'Export error: ' + e.message);
                         }
-                        setTimeout(() => { progress.style.display = 'none'; }, 500);
+                        setTimeout(() => { if (progress) progress.style.display = 'none'; }, 500);
                     }
-                    document.getElementById('exportProgressFill').style.width = pct + '%';
-                    document.getElementById('exportProgressText').textContent = Math.round(pct) + '% — Exporting...';
+                    const exportProgressFill = document.getElementById('exportProgressFill');
+                    const exportProgressText = document.getElementById('exportProgressText');
+                    if (exportProgressFill) exportProgressFill.style.width = pct + '%';
+                    if (exportProgressText) exportProgressText.textContent = Math.round(pct) + '% — Exporting...';
                 }, 100);
             });
         });
@@ -983,11 +1064,14 @@ class OmniConsole {
         this.bookmarks.forEach((b, i) => {
             const item = document.createElement('div');
             item.className = 'bookmark-item';
-            item.innerHTML = `<span class="bookmark-name">${b.name}</span><span class="bookmark-coords">${b.x},${b.y},${b.z}</span><span class="bookmark-del" data-idx="${i}">✕</span>`;
+            item.innerHTML = `<span class="bookmark-name">${this._escapeHtml(b.name)}</span><span class="bookmark-coords">${b.x},${b.y},${b.z}</span><span class="bookmark-del" data-idx="${i}">✕</span>`;
             item.querySelector('.bookmark-name').addEventListener('click', () => {
-                document.getElementById('tpX').value = b.x;
-                document.getElementById('tpY').value = b.y;
-                document.getElementById('tpZ').value = b.z;
+                const tpX = document.getElementById('tpX');
+                const tpY = document.getElementById('tpY');
+                const tpZ = document.getElementById('tpZ');
+                if (tpX) tpX.value = b.x;
+                if (tpY) tpY.value = b.y;
+                if (tpZ) tpZ.value = b.z;
                 this.engine.teleportCamera(b.x, b.y, b.z);
             });
             item.querySelector('.bookmark-del').addEventListener('click', (e) => {
@@ -1002,7 +1086,7 @@ class OmniConsole {
     bindBrain() {
         const brainCloudBtn = document.getElementById('brainCloudBtn');
         if (brainCloudBtn) brainCloudBtn.addEventListener('click', () => {
-            brainCloudBtn.classList.add('active');
+            if (brainCloudBtn) brainCloudBtn.classList.add('active');
             const brainLocalBtn = document.getElementById('brainLocalBtn');
             if (brainLocalBtn) brainLocalBtn.classList.remove('active');
             const cloudSettings = document.getElementById('brainCloudSettings');
@@ -1012,7 +1096,7 @@ class OmniConsole {
         });
         const brainLocalBtn = document.getElementById('brainLocalBtn');
         if (brainLocalBtn) brainLocalBtn.addEventListener('click', () => {
-            brainLocalBtn.classList.add('active');
+            if (brainLocalBtn) brainLocalBtn.classList.add('active');
             if (brainCloudBtn) brainCloudBtn.classList.remove('active');
             const localSettings = document.getElementById('brainLocalSettings');
             if (localSettings) localSettings.style.display = '';
@@ -1154,11 +1238,11 @@ class OmniConsole {
             div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg-alt);border-radius:6px;margin:3px 0;font-size:11px';
             const v = VisualDefs[obj.type];
             div.innerHTML = `
-                <span style="color:${this.colorToCSS(obj.getColor())}">${obj.type}</span>
+                <span style="color:${this._safeHexColor(this.colorToCSS(obj.getColor()), '#94a3b8')}">${this._escapeHtml(obj.type)}</span>
                 <span style="color:var(--text-dim)">(${obj.x},${obj.y},${obj.z})</span>
-                <span style="color:var(--success)">${obj.state}</span>
-                <button class="int-interact-btn" data-id="${obj.id}" style="margin-left:auto;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Interact</button>
-                <button class="int-remove-btn" data-id="${obj.id}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button>
+                <span style="color:var(--success)">${this._escapeHtml(obj.state)}</span>
+                <button class="int-interact-btn" data-id="${this._escapeHtml(String(obj.id))}" style="margin-left:auto;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Interact</button>
+                <button class="int-remove-btn" data-id="${this._escapeHtml(String(obj.id))}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button>
             `;
             list.appendChild(div);
         }
@@ -1238,7 +1322,7 @@ class OmniConsole {
                 this.crafting.addRecipe(recipe);
                 this.refreshCraftingList();
                 this.addChatMessage('assistant', `Generated recipe: ${recipe.name} (${recipe.ingredients.map(i => i.item + ' x' + i.count).join(' + ')} → ${recipe.result} x${recipe.count})`);
-            } catch (e) { console.warn('Craft AI failed:', e); }
+            } catch (e) { this.log('Craft AI failed: ' + e.message, 'warn'); }
         });
     }
 
@@ -1253,10 +1337,10 @@ class OmniConsole {
             const ings = r.ingredients.map(i => `${i.has >= i.count ? '✓' : '✗'} ${i.item} ${i.has}/${i.count}`).join(', ');
             div.innerHTML = `
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text)">${r.name} x${r.count}</span>
-                    <button class="craft-btn" data-recipe="${r.id}" ${r.canCraft ? '' : 'disabled'} style="padding:2px 8px;border:1px solid ${r.canCraft ? 'var(--success)' : 'var(--border)'};border-radius:4px;background:${r.canCraft ? 'rgba(34,197,94,0.2)' : 'var(--bg)'};color:${r.canCraft ? 'var(--success)' : 'var(--text-dim)'};cursor:${r.canCraft ? 'pointer' : 'not-allowed'};font-size:10px">Craft</button>
+                    <span style="color:var(--text)">${this._escapeHtml(r.name)} x${r.count}</span>
+                    <button class="craft-btn" data-recipe="${this._escapeHtml(String(r.id))}" ${r.canCraft ? '' : 'disabled'} style="padding:2px 8px;border:1px solid ${r.canCraft ? 'var(--success)' : 'var(--border)'};border-radius:4px;background:${r.canCraft ? 'rgba(34,197,94,0.2)' : 'var(--bg)'};color:${r.canCraft ? 'var(--success)' : 'var(--text-dim)'};cursor:${r.canCraft ? 'pointer' : 'not-allowed'};font-size:10px">Craft</button>
                 </div>
-                <div style="color:var(--text-dim);font-size:10px;margin-top:2px">${ings}</div>
+                <div style="color:var(--text-dim);font-size:10px;margin-top:2px">${this._escapeHtml(ings)}</div>
             `;
             list.appendChild(div);
         }
@@ -1512,7 +1596,7 @@ class OmniConsole {
         for (const bp of this.blueprints.getAll()) {
             const div = document.createElement('div');
             div.style.cssText = 'padding:6px 8px;background:var(--bg-alt);border-radius:6px;margin:3px 0;font-size:11px;display:flex;justify-content:space-between;align-items:center';
-            div.innerHTML = `<span style="color:var(--text)">${bp.name} (${bp.width}x${bp.height}x${bp.depth})</span><div style="display:flex;gap:4px"><button class="bp-place-btn" data-id="${bp.id}" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Place</button><button class="bp-del-btn" data-id="${bp.id}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button></div>`;
+            div.innerHTML = `<span style="color:var(--text)">${this._escapeHtml(bp.name)} (${bp.width}x${bp.height}x${bp.depth})</span><div style="display:flex;gap:4px"><button class="bp-place-btn" data-id="${this._escapeHtml(String(bp.id))}" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Place</button><button class="bp-del-btn" data-id="${this._escapeHtml(String(bp.id))}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button></div>`;
             list.appendChild(div);
         }
         list.querySelectorAll('.bp-place-btn').forEach(btn => {
@@ -1545,7 +1629,7 @@ class OmniConsole {
         for (const entry of timeline) {
             const div = document.createElement('div');
             div.style.cssText = `padding:4px 8px;background:${entry.isCurrent ? 'rgba(139,92,246,0.2)' : 'var(--bg-alt)'};border-radius:4px;margin:2px 0;font-size:10px;cursor:pointer;border-left:2px solid ${entry.isCurrent ? '#8b5cf6' : 'var(--border)'}`;
-            div.innerHTML = `<span style="color:var(--text)">${entry.description}</span><span style="color:var(--text-dim);margin-left:4px">${entry.blockCount} blocks</span>`;
+            div.innerHTML = `<span style="color:var(--text)">${this._escapeHtml(entry.description)}</span><span style="color:var(--text-dim);margin-left:4px">${entry.blockCount} blocks</span>`;
             div.addEventListener('click', () => {
                 if (!this.engine?.wasmReady) return;
                 this.buildingHistory.jumpTo(entry.index);
@@ -1564,12 +1648,6 @@ async function startApp() {
     const app = new OmniConsole();
     await app.init();
     window.__omni = app;
-    _escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
 }
 
 document.addEventListener('DOMContentLoaded', startApp);

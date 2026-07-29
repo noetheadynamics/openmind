@@ -138,6 +138,7 @@
             for (const fn of this.listeners) fn({ type, ...data });
         }
         _escapeHtml(str) {
+            if (typeof OMUtils !== 'undefined') return OMUtils.escapeHtml(str);
             if (!str) return '';
             const div = document.createElement('div');
             div.textContent = str;

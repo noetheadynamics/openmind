@@ -27,6 +27,7 @@ std::string AnthropicClient::buildRequestBody(const std::string& prompt, const s
             if (c == '"') json << "\\\"";
             else if (c == '\\') json << "\\\\";
             else if (c == '\n') json << "\\n";
+            else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
             else json << c;
         }
         json << "\"";
@@ -37,6 +38,7 @@ std::string AnthropicClient::buildRequestBody(const std::string& prompt, const s
         if (c == '"') json << "\\\"";
         else if (c == '\\') json << "\\\\";
         else if (c == '\n') json << "\\n";
+        else if (c < 0x20) { json << "\\u00" << std::hex << (int)c; }
         else json << c;
     }
     json << "\"}]}";
