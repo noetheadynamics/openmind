@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>OpenMind – Omni-Console</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' fill='none' stroke='%236366f1' stroke-width='2'/></svg>">
     <link rel="manifest" href="manifest.json">
@@ -396,6 +399,7 @@
                     <span class="status-dot" id="brainStatusDot"></span>
                     <span id="brainStatusText">Disconnected</span>
                     <button class="action-btn small-btn" id="brainTestBtn">Test Connection</button>
+                    <button class="action-btn small-btn" id="brainClearBtn" style="background:rgba(239,68,68,0.15);color:var(--error);border:1px solid rgba(239,68,68,0.3)">Clear</button>
                 </div>
             </div>
         </section>
@@ -607,9 +611,9 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="voxel_renderer.js"></script>
+    <script src="voxel_renderer.js?v=3"></script>
     <script src="water_renderer.js"></script>
-    <script src="skybox.js"></script>
+    <script src="skybox.js?v=3"></script>
     <script src="post_processing.js"></script>
     <script src="llm_client.js"></script>
     <script src="network.js"></script>
@@ -621,6 +625,6 @@
     <script src="chat.js"></script>
     <script src="touch_controls.js"></script>
     <script src="openmind.js"></script>
-    <script src="omni_console.js?v=2"></script>
+    <script src="omni_console.js?v=3"></script>
 </body>
 </html>

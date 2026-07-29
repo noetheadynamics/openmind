@@ -1092,6 +1092,32 @@ class OmniConsole {
 
     /* ====== AI BRAIN SWITCHER ====== */
     bindBrain() {
+        const STORAGE_KEY = 'openmind_brain_config';
+
+        const saveBrainConfig = (config) => {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+        };
+        const loadBrainConfig = () => {
+            try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null; } catch (e) { return null; }
+        };
+        const clearBrainConfig = () => {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+            const dot = document.getElementById('brainStatusDot');
+            const text = document.getElementById('brainStatusText');
+            if (dot) dot.style.background = '';
+            if (text) text.textContent = 'Disconnected';
+            this.llm.apiKey = '';
+            this.llm.provider = 'groq';
+            this.llm.endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+            this.llm.model = 'llama-3.3-70b-versatile';
+            const providerEl = document.getElementById('llmProvider');
+            const apiKeyEl = document.getElementById('llmApiKey');
+            const endpointEl = document.getElementById('cloudEndpoint');
+            if (providerEl) providerEl.value = 'groq';
+            if (apiKeyEl) apiKeyEl.value = '';
+            if (endpointEl) endpointEl.value = '';
+        };
+
         const brainCloudBtn = document.getElementById('brainCloudBtn');
         if (brainCloudBtn) brainCloudBtn.addEventListener('click', () => {
             if (brainCloudBtn) brainCloudBtn.classList.add('active');
@@ -1135,6 +1161,13 @@ class OmniConsole {
                 });
             }
         });
+
+        const brainClearBtn = document.getElementById('brainClearBtn');
+        if (brainClearBtn) brainClearBtn.addEventListener('click', () => {
+            clearBrainConfig();
+            this.addChatMessage('assistant', 'Brain config cleared.');
+        });
+
         const brainTestBtn = document.getElementById('brainTestBtn');
         if (brainTestBtn) brainTestBtn.addEventListener('click', () => {
             const dot = document.getElementById('brainStatusDot');
@@ -1153,6 +1186,7 @@ class OmniConsole {
                         this.llm.setConfig('openai', '', endpoint + '/v1/chat/completions', model || 'local');
                         if (dot) dot.style.background = 'var(--success)';
                         if (text) text.textContent = 'Connected to ' + provider;
+                        saveBrainConfig({ mode: 'local', provider, endpoint, model });
                     } else {
                         if (dot) dot.style.background = 'var(--error)';
                         if (text) text.textContent = 'Failed: ' + provider;
@@ -1165,11 +1199,40 @@ class OmniConsole {
                 this.llm.setConfig(provider, apiKey, endpoint || '', model || '');
                 if (dot) dot.style.background = 'var(--success)';
                 if (text) text.textContent = 'Configured: ' + provider + (model ? ' / ' + model : '');
+                saveBrainConfig({ mode: 'cloud', provider, apiKey, endpoint, model });
             } else {
                 if (dot) dot.style.background = 'var(--error)';
                 if (text) text.textContent = 'No API key provided';
             }
         });
+
+        const saved = loadBrainConfig();
+        if (saved) {
+            if (saved.mode === 'cloud' && saved.apiKey) {
+                this.llm.setConfig(saved.provider, saved.apiKey, saved.endpoint || '', saved.model || '');
+                const providerEl = document.getElementById('llmProvider');
+                const apiKeyEl = document.getElementById('llmApiKey');
+                const endpointEl = document.getElementById('cloudEndpoint');
+                if (providerEl && saved.provider) providerEl.value = saved.provider;
+                if (apiKeyEl) apiKeyEl.value = saved.apiKey;
+                if (endpointEl && saved.endpoint) endpointEl.value = saved.endpoint;
+                if (providerEl) providerEl.dispatchEvent(new Event('change'));
+                const dot = document.getElementById('brainStatusDot');
+                const text = document.getElementById('brainStatusText');
+                if (dot) dot.style.background = 'var(--success)';
+                if (text) text.textContent = 'Restored: ' + saved.provider + (saved.model ? ' / ' + saved.model : '');
+                this.addChatMessage('assistant', 'Restored saved brain config: ' + saved.provider);
+            } else if (saved.mode === 'local' && saved.endpoint) {
+                this.llm.setConfig('openai', '', saved.endpoint + '/v1/chat/completions', saved.model || 'local');
+                const localEndpoint = document.getElementById('localEndpoint');
+                if (localEndpoint) localEndpoint.value = saved.endpoint;
+                const dot = document.getElementById('brainStatusDot');
+                const text = document.getElementById('brainStatusText');
+                if (dot) dot.style.background = 'var(--success)';
+                if (text) text.textContent = 'Restored: ' + saved.provider;
+                this.addChatMessage('assistant', 'Restored saved brain config: ' + saved.provider);
+            }
+        }
     }
 
     /* ====== MISC ====== */
