@@ -155,49 +155,79 @@ class VoxelRenderer {
 
     initControls() {
         const el = this.renderer.domElement;
+        this._mouseDownPos = { x: 0, y: 0 };
+        this._mouseMoved = false;
+        this._dragThreshold = 5;
 
         el.addEventListener('mousedown', (e) => {
-            if (e.button === 2) {
-                this.isRightDrag = true;
+            this._mouseDownPos = { x: e.clientX, y: e.clientY };
+            this._mouseMoved = false;
+
+            if (e.button === 0 || e.button === 2) {
                 this.isDragging = true;
+                this.isRightDrag = (e.button === 2);
+                this.isLeftDrag = (e.button === 0);
                 this.prevMouse = { x: e.clientX, y: e.clientY };
                 e.preventDefault();
-                return;
-            }
-            if (e.button === 0 && e.shiftKey) {
-                this.removeBlock();
-                return;
-            }
-            if (e.button === 0) {
-                const target = this.getTargetBlock();
-                if (target) {
-                    const bt = this.blockTypes.find(b => b.id === this.getBlockAt(target.x, target.y, target.z)?.type);
-                    if (bt && bt.interactive) {
-                        this.interact(target.x, target.y, target.z, bt);
-                    } else {
-                        this.placeBlock();
-                    }
-                } else {
-                    this.placeBlock();
-                }
             }
         });
 
         el.addEventListener('mousemove', (e) => {
             this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            if (this.isDragging && this.isRightDrag) {
-                const dx = e.clientX - this.prevMouse.x;
-                const dy = e.clientY - this.prevMouse.y;
-                this.cameraSpherical.theta -= dx * 0.005;
-                this.cameraSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraSpherical.phi + dy * 0.005));
+
+            if (this.isDragging) {
+                const dx = e.clientX - this._mouseDownPos.x;
+                const dy = e.clientY - this._mouseDownPos.y;
+                if (Math.abs(dx) > this._dragThreshold || Math.abs(dy) > this._dragThreshold) {
+                    this._mouseMoved = true;
+                }
+
+                const mdx = e.clientX - this.prevMouse.x;
+                const mdy = e.clientY - this.prevMouse.y;
+
+                if (this.isRightDrag) {
+                    const forward = new THREE.Vector3();
+                    this.camera.getWorldDirection(forward);
+                    const up = new THREE.Vector3(0, 1, 0);
+                    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+                    const camUp = new THREE.Vector3().crossVectors(right, forward).normalize();
+                    this.cameraTarget.add(right.multiplyScalar(-mdx * 0.03));
+                    this.cameraTarget.add(camUp.multiplyScalar(mdy * 0.03));
+                } else if (this.isLeftDrag) {
+                    this.cameraSpherical.theta -= mdx * 0.005;
+                    this.cameraSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraSpherical.phi + mdy * 0.005));
+                }
+
                 this.prevMouse = { x: e.clientX, y: e.clientY };
                 this.updateCamera();
             }
         });
 
-        el.addEventListener('mouseup', () => { this.isDragging = false; this.isRightDrag = false; });
-        el.addEventListener('mouseleave', () => { this.isDragging = false; this.isRightDrag = false; this.highlightMesh.visible = false; });
+        el.addEventListener('mouseup', (e) => {
+            const wasDragging = this._mouseMoved;
+            this.isDragging = false;
+            this.isRightDrag = false;
+            this.isLeftDrag = false;
+
+            if (!wasDragging && e.button === 0) {
+                if (e.shiftKey) {
+                    this.removeBlock();
+                } else {
+                    const target = this.getTargetBlock();
+                    if (target) {
+                        const bt = this.blockTypes.find(b => b.id === this.getBlockAt(target.x, target.y, target.z)?.type);
+                        if (bt && bt.interactive) {
+                            this.interact(target.x, target.y, target.z, bt);
+                        } else {
+                            this.placeBlock();
+                        }
+                    }
+                }
+            }
+        });
+
+        el.addEventListener('mouseleave', () => { this.isDragging = false; this.isRightDrag = false; this.isLeftDrag = false; this.highlightMesh.visible = false; });
         el.addEventListener('contextmenu', (e) => e.preventDefault());
 
         el.addEventListener('wheel', (e) => {
