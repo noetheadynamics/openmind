@@ -405,6 +405,10 @@ class OmniConsole {
                 if (this.llm.apiKey) {
                     const result = await this.llm.generate(text);
                     if (result.success) {
+                        if (result.blocks.length === 0) {
+                            this.addChatMessage('assistant', 'LLM returned 0 blocks. Raw response logged to console.');
+                            console.log('[LLM] Empty blocks. Provider:', this.llm.provider, 'Model:', this.llm.model);
+                        }
                         const placed = await this.llm.executeBlocks(result.blocks);
                         this.engine.tick(0.1);
                         this.addChatMessage('assistant', 'Generated ' + placed + ' blocks via ' + this.llm.provider + '.');

@@ -171,6 +171,7 @@ Examples:
     }
 
     parseBlocks(content) {
+        console.log('[LLM] Raw response:', content.substring(0, 500));
         let cleaned = content.trim();
         cleaned = cleaned.replace(/```json\s*/g, '').replace(/```\s*/g, '');
         cleaned = cleaned.replace(/^[^\[{]*([\[\s\S]*\])[^}\]]*$/, '$1');
@@ -184,6 +185,18 @@ Examples:
             const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
             if (arrayMatch) {
                 try { return JSON.parse(arrayMatch[0]); } catch {}
+            }
+            const lines = content.split('\n');
+            const jsonLines = [];
+            let inArray = false;
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('[')) inArray = true;
+                if (inArray) jsonLines.push(trimmed);
+                if (trimmed.endsWith(']')) break;
+            }
+            if (jsonLines.length > 0) {
+                try { return JSON.parse(jsonLines.join('\n')); } catch {}
             }
             return [];
         }
