@@ -402,11 +402,18 @@ class OmniConsole {
         } else {
             this.addChatMessage('assistant', 'Generating: "' + text + '"...');
             if (this.engine.wasmReady) {
+                const inputKey = document.getElementById('llmApiKey')?.value?.trim() || '';
+                if (inputKey && inputKey.length > 5 && !this.llm.apiKey) {
+                    const provider = document.getElementById('llmProvider')?.value || 'groq';
+                    const endpoint = document.getElementById('cloudEndpoint')?.value || '';
+                    const model = provider === 'custom' ? document.getElementById('cloudCustomModel')?.value : document.getElementById('llmModel')?.value;
+                    this.llm.setConfig(provider, inputKey, endpoint || '', model || '');
+                }
                 if (this.llm.apiKey) {
                     const result = await this.llm.generate(text);
                     if (result.success) {
                         if (result.blocks.length === 0) {
-                            this.addChatMessage('assistant', 'LLM returned 0 blocks. Raw response logged to console.');
+                            this.addChatMessage('assistant', 'LLM returned 0 blocks. Check console (F12) for raw response.');
                             console.log('[LLM] Empty blocks. Provider:', this.llm.provider, 'Model:', this.llm.model);
                         }
                         const placed = await this.llm.executeBlocks(result.blocks);
@@ -417,11 +424,7 @@ class OmniConsole {
                         this.addChatMessage('assistant', 'LLM error: ' + result.error);
                     }
                 } else {
-                    const result = this.engine.generateFromPrompt(text);
-                    this.engine.tick(0.1);
-                    const stats = this.engine.getWorldStats();
-                    this.addChatMessage('assistant', 'Generated ' + (stats.totalBlocks || 0) + ' blocks (local mode). Add API key in Brain panel for AI generation.');
-                    this.updateStats();
+                    this.addChatMessage('assistant', 'No API key. Add your key in the Brain panel and click Test Connection.');
                 }
             } else {
                 this.addChatMessage('assistant', 'WASM engine not connected.');
