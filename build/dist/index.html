@@ -384,7 +384,7 @@
                     <div class="brain-select-row"><label>Provider</label><select id="llmProvider"><option value="groq">Groq (Fast)</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option><option value="custom">Custom (OpenAI-compatible)</option></select></div>
                     <div class="brain-select-row" id="cloudModelRow"><label>Model</label><select id="llmModel"><option value="llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option><option value="llama-3.1-8b-instant">Llama 3.1 8B (Groq)</option><option value="mixtral-8x7b-32768">Mixtral 8x7B (Groq)</option></select></div>
                     <div class="brain-input-row hidden" id="cloudCustomModelRow"><label>Model Name</label><input type="text" id="cloudCustomModel" placeholder="e.g. deepseek-chat, my-finetuned-model"></div>
-                    <div class="brain-input-row hidden" id="cloudEndpointRow"><label>Endpoint</label><input type="text" id="cloudEndpoint" placeholder="https://api.example.com/v1/chat/completions"></div>
+                    <div class="brain-input-row" id="cloudEndpointRow"><label>Endpoint (optional — leave blank for default)</label><input type="text" id="cloudEndpoint" placeholder="https://api.groq.com/openai/v1/chat/completions"></div>
                     <div class="brain-input-row"><label>API Key</label><input type="password" id="llmApiKey" placeholder="sk-..."></div>
                 </div>
                 <div class="brain-settings hidden" id="brainLocalSettings">
@@ -621,6 +621,6 @@
     <script src="chat.js"></script>
     <script src="touch_controls.js"></script>
     <script src="openmind.js"></script>
-    <script src="omni_console.js"></script>
+    <script src="omni_console.js?v=2"></script>
 </body>
 </html>

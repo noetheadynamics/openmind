@@ -1115,10 +1115,8 @@ class OmniConsole {
             const isCustom = e.target.value === 'custom';
             const modelRow = document.getElementById('cloudModelRow');
             const customModelRow = document.getElementById('cloudCustomModelRow');
-            const endpointRow = document.getElementById('cloudEndpointRow');
-            if (modelRow) modelRow.style.display = isCustom ? 'none' : '';
-            if (customModelRow) customModelRow.style.display = isCustom ? '' : 'none';
-            if (endpointRow) endpointRow.style.display = isCustom ? '' : 'none';
+            if (modelRow) { if (isCustom) modelRow.classList.add('hidden'); else modelRow.classList.remove('hidden'); }
+            if (customModelRow) { if (isCustom) customModelRow.classList.remove('hidden'); else customModelRow.classList.add('hidden'); }
             const sel = document.getElementById('llmModel');
             if (sel) {
                 sel.innerHTML = '';
@@ -1137,7 +1135,7 @@ class OmniConsole {
             if (text) text.textContent = 'Testing...';
             const isLocal = document.getElementById('brainLocalBtn')?.classList.contains('active');
             const provider = isLocal ? document.getElementById('localProvider')?.value : document.getElementById('llmProvider')?.value;
-            const endpoint = isLocal ? document.getElementById('localEndpoint')?.value : (provider === 'custom' ? document.getElementById('cloudEndpoint')?.value : '');
+            const endpoint = isLocal ? document.getElementById('localEndpoint')?.value : document.getElementById('cloudEndpoint')?.value || '';
             const apiKey = document.getElementById('llmApiKey')?.value || '';
             const model = isLocal ? document.getElementById('localModel')?.value : (provider === 'custom' ? document.getElementById('cloudCustomModel')?.value : document.getElementById('llmModel')?.value);
 
