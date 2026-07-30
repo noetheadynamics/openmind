@@ -410,18 +410,26 @@ class OmniConsole {
                     this.llm.setConfig(provider, inputKey, endpoint || '', model || '');
                 }
                 if (this.llm.apiKey) {
+                    this.llm.onToolCall = (name, args) => {
+                        this.addChatMessage('assistant', `Tool: ${name}(${JSON.stringify(args).substring(0, 120)}...)`);
+                    };
                     const result = await this.llm.generate(text);
+                    this.llm.onToolCall = null;
                     if (result.success) {
-                        if (result.blocks.length === 0) {
-                            this.addChatMessage('assistant', 'LLM returned 0 blocks. Check console (F12) for raw response.');
-                            console.log('[LLM] Empty blocks. Provider:', this.llm.provider, 'Model:', this.llm.model);
+                        if (result.blocks && result.blocks.length > 0) {
+                            const placed = await this.llm.executeBlocks(result.blocks);
+                            this.engine.tick(0.1);
+                            this.addChatMessage('assistant', 'Generated ' + placed + ' blocks via ' + this.llm.provider + '.');
+                        } else if (result.totalBlocksPlaced > 0) {
+                            this.engine.tick(0.1);
+                            const tools = result.toolsUsed?.length ? ` Used: ${result.toolsUsed.join(', ')}.` : '';
+                            this.addChatMessage('assistant', `Built ${result.totalBlocksPlaced} blocks in ${result.iterations} steps.${tools}\n${result.text || ''}`);
+                        } else {
+                            this.addChatMessage('assistant', result.text || 'No blocks were placed.');
                         }
-                        const placed = await this.llm.executeBlocks(result.blocks);
-                        this.engine.tick(0.1);
-                        this.addChatMessage('assistant', 'Generated ' + placed + ' blocks via ' + this.llm.provider + '.');
                         this.updateStats();
                     } else {
-                        this.addChatMessage('assistant', 'LLM error: ' + result.error);
+                        this.addChatMessage('assistant', 'Error: ' + result.error);
                     }
                 } else {
                     this.addChatMessage('assistant', 'No API key. Add your key in the Brain panel and click Test Connection.');
