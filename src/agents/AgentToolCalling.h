@@ -142,6 +142,100 @@ public:
         return r;
     }
 
+    ToolResult placeBlocks(const std::vector<std::tuple<int,int,int,std::string>>& blocks) {
+        ToolResult r;
+        if (!world) { r.output = "No world"; return r; }
+        int count = 0;
+        for (const auto& b : blocks) {
+            int x = std::get<0>(b), y = std::get<1>(b), z = std::get<2>(b);
+            if (x < 0 || x > 255 || y < 0 || y > 255 || z < 0 || z > 255) continue;
+            BlockType t = stringToBlockType(std::get<3>(b));
+            if (t != BlockType::AIR) { world->setBlock(x, y, z, t); count++; }
+        }
+        r.success = count > 0;
+        r.output = "Placed " + std::to_string(count) + " blocks";
+        return r;
+    }
+
+    ToolResult fillRect(int x1, int y1, int z1, int x2, int y2, int z2, const std::string& typeName) {
+        ToolResult r;
+        if (!world) { r.output = "No world"; return r; }
+        BlockType t = stringToBlockType(typeName);
+        if (t == BlockType::AIR) { r.output = "Unknown type: " + typeName; return r; }
+        int xa = std::min(x1, x2), xb = std::max(x1, x2);
+        int ya = std::min(y1, y2), yb = std::max(y1, y2);
+        int za = std::min(z1, z2), zb = std::max(z1, z2);
+        int count = 0;
+        for (int x = xa; x <= xb; x++)
+            for (int y = ya; y <= yb; y++)
+                for (int z = za; z <= zb; z++)
+                    if (x >= 0 && x < 256 && y >= 0 && y < 256 && z >= 0 && z < 256)
+                        { world->setBlock(x, y, z, t); count++; }
+        r.success = true;
+        r.output = "Filled rect: " + std::to_string(count) + " blocks";
+        return r;
+    }
+
+    ToolResult hollowRect(int x1, int y1, int z1, int x2, int y2, int z2, const std::string& typeName) {
+        ToolResult r;
+        if (!world) { r.output = "No world"; return r; }
+        BlockType t = stringToBlockType(typeName);
+        if (t == BlockType::AIR) { r.output = "Unknown type: " + typeName; return r; }
+        int xa = std::min(x1, x2), xb = std::max(x1, x2);
+        int ya = std::min(y1, y2), yb = std::max(y1, y2);
+        int za = std::min(z1, z2), zb = std::max(z1, z2);
+        int count = 0;
+        for (int x = xa; x <= xb; x++)
+            for (int y = ya; y <= yb; y++)
+                for (int z = za; z <= zb; z++)
+                    if ((x == xa || x == xb || y == ya || y == yb || z == za || z == zb)
+                        && x >= 0 && x < 256 && y >= 0 && y < 256 && z >= 0 && z < 256)
+                        { world->setBlock(x, y, z, t); count++; }
+        r.success = true;
+        r.output = "Hollow rect: " + std::to_string(count) + " wall blocks";
+        return r;
+    }
+
+    ToolResult surveyArea(int x1, int y1, int z1, int x2, int y2, int z2) {
+        ToolResult r;
+        if (!world) { r.output = "No world"; return r; }
+        int xa = std::min(x1, x2), xb = std::max(x1, x2);
+        int ya = std::min(y1, y2), yb = std::max(y1, y2);
+        int za = std::min(z1, z2), zb = std::max(z1, z2);
+        int counts[256] = {0};
+        int total = 0;
+        for (int x = xa; x <= xb; x++)
+            for (int y = ya; y <= yb; y++)
+                for (int z = za; z <= zb; z++) {
+                    VoxelData vd;
+                    if (world->getBlock(x, y, z, vd) && vd.occupied && vd.type < 256)
+                        counts[(int)vd.type]++;
+                    total++;
+                }
+        std::ostringstream ss;
+        ss << "Surveyed " << total << " positions.";
+        r.success = true;
+        r.output = ss.str();
+        return r;
+    }
+
+    ToolResult clearArea(int x1, int y1, int z1, int x2, int y2, int z2) {
+        ToolResult r;
+        if (!world) { r.output = "No world"; return r; }
+        int xa = std::min(x1, x2), xb = std::max(x1, x2);
+        int ya = std::min(y1, y2), yb = std::max(y1, y2);
+        int za = std::min(z1, z2), zb = std::max(z1, z2);
+        int count = 0;
+        for (int x = xa; x <= xb; x++)
+            for (int y = ya; y <= yb; y++)
+                for (int z = za; z <= zb; z++)
+                    if (x >= 0 && x < 256 && y >= 0 && y < 256 && z >= 0 && z < 256)
+                        { world->setBlock(x, y, z, BlockType::AIR); count++; }
+        r.success = true;
+        r.output = "Cleared " + std::to_string(count) + " blocks";
+        return r;
+    }
+
     ToolResult buildStructure(const std::string& type, int bx, int by, int bz, int size) {
         ToolResult r;
         if (!world) { r.output = "No world"; return r; }
@@ -206,6 +300,22 @@ public:
             return buildStructure(args[0], safeStoi(args[1]), safeStoi(args[2]),
                                   safeStoi(args[3]), safeStoi(args[4]));
         }
+        if (toolName == "fill_rect" && args.size() >= 7) {
+            return fillRect(safeStoi(args[0]), safeStoi(args[1]), safeStoi(args[2]),
+                           safeStoi(args[3]), safeStoi(args[4]), safeStoi(args[5]), args[6]);
+        }
+        if (toolName == "hollow_rect" && args.size() >= 7) {
+            return hollowRect(safeStoi(args[0]), safeStoi(args[1]), safeStoi(args[2]),
+                             safeStoi(args[3]), safeStoi(args[4]), safeStoi(args[5]), args[6]);
+        }
+        if (toolName == "survey_area" && args.size() >= 6) {
+            return surveyArea(safeStoi(args[0]), safeStoi(args[1]), safeStoi(args[2]),
+                             safeStoi(args[3]), safeStoi(args[4]), safeStoi(args[5]));
+        }
+        if (toolName == "clear_area" && args.size() >= 6) {
+            return clearArea(safeStoi(args[0]), safeStoi(args[1]), safeStoi(args[2]),
+                            safeStoi(args[3]), safeStoi(args[4]), safeStoi(args[5]));
+        }
 
         ToolResult r;
         r.output = "Unknown tool: " + toolName;
@@ -216,8 +326,13 @@ public:
         return
             "Available tools:\n"
             "- move_to(x, y, z) - Walk to a location\n"
-            "- place_block(x, y, z, blockType) - Place a block\n"
+            "- place_block(x, y, z, blockType) - Place a single block\n"
+            "- place_blocks(blocks) - Place multiple blocks at once\n"
+            "- fill_rect(x1, y1, z1, x2, y2, z2, blockType) - Fill a rectangular volume\n"
+            "- hollow_rect(x1, y1, z1, x2, y2, z2, blockType) - Build hollow rectangular walls\n"
             "- break_block(x, y, z) - Break a block\n"
+            "- survey_area(x1, y1, z1, x2, y2, z2) - Count block types in a region\n"
+            "- clear_area(x1, y1, z1, x2, y2, z2) - Remove all blocks in a region\n"
             "- scan_inventory() - Check inventory\n"
             "- talk_to(agentId, message) - Talk to another agent\n"
             "- search_for(resource) - Find a resource\n"

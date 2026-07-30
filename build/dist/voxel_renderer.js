@@ -502,16 +502,14 @@ class VoxelRenderer {
             if (this.blocks.size > 0) { this.blocks.clear(); this.dirty = true; }
             return;
         }
-        const step = Math.max(1, Math.floor(blockCount / 20000));
-        let scanned = 0;
-        for (let x = 0; x < 256 && scanned < 50000; x += step) {
-            for (let y = 0; y < 256 && scanned < 50000; y += step) {
-                for (let z = 0; z < 256 && scanned < 50000; z += step) {
+        const step = Math.max(1, Math.min(4, Math.floor(blockCount / 10000)));
+        for (let x = 0; x < 256; x += step) {
+            for (let y = 0; y < 256; y += step) {
+                for (let z = 0; z < 256; z += step) {
                     const data = this.engine.getBlock(x, y, z);
                     if (data && data.exists && data.blockType !== 0) {
                         newBlocks.set(`${x},${y},${z}`, { x, y, z, type: data.blockType });
                     }
-                    scanned++;
                 }
             }
         }

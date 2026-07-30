@@ -313,6 +313,7 @@
             const obj = this.objects.get(id);
             if (!obj) return;
             this.signals.push({ id, ...data, time: Date.now() });
+            if (this.signals.length > 100) this.signals.splice(0, this.signals.length - 100);
 
             for (const listener of this.listeners) {
                 listener({ type: 'signal', id, obj, ...data });

@@ -20,7 +20,7 @@ if(EMSCRIPTEN)
 
     set(EMSCRIPTEN_FLAGS
         "-s WASM=1"
-        "-s EXPORTED_FUNCTIONS=['_initWorld','_setBlock','_setBlockSimple','_tickPhysics','_tickPhysicsDelta','_getBlockData','_getWorldStats','_setTimeScale','_setGravity','_setAmbientTemperature','_setWind','_rewindTime','_saveSnapshot','_getPendingFragments','_addAgent','_getAgentData','_getAgentCount','_exportCSV','_exportGLTF','_cleanup','_setWeather','_getWeatherType','_getWeather','_setTimeOfDay','_getTimeOfDay','_getSunPosition','_getSunlightIntensity','_setCycleDuration','_malloc','_free']"
+        "-s EXPORTED_FUNCTIONS=['_initWorld','_setBlock','_setBlockSimple','_removeBlock','_getBlockData','_getWorldStats','_setTimeScale','_setGravity','_setAmbientTemperature','_setWind','_rewindTime','_saveSnapshot','_getPendingFragments','_addAgent','_setAgentPosition','_getAgentData','_getAgentCount','_generateFromPrompt','_teleportCamera','_setOverlay','_exportCSV','_exportGLTF','_getLastExportCSV','_getLastExportGLTF','_saveWorld','_cleanup','_tickPhysics','_tickPhysicsDelta','_setWeather','_getWeatherType','_getWeather','_setTimeOfDay','_getTimeOfDay','_getSunPosition','_getSunlightIntensity','_setCycleDuration','_malloc','_free']"
         "-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','getValue','setValue','UTF8ToString','stringToUTF8','lengthBytesUTF8']"
         "-s ALLOW_MEMORY_GROWTH=1"
         "-s INITIAL_MEMORY=16777216"
@@ -39,7 +39,7 @@ if(EMSCRIPTEN)
 
     target_compile_options(openmind PRIVATE
         "-O2"
-        "-sEXPORTED_FUNCTIONS=['_initWorld','_setBlock','_setBlockSimple','_tickPhysics','_tickPhysicsDelta','_getBlockData','_getWorldStats','_setTimeScale','_setGravity','_setAmbientTemperature','_setWind','_rewindTime','_saveSnapshot','_getPendingFragments','_addAgent','_getAgentData','_getAgentCount','_exportCSV','_exportGLTF','_cleanup','_setWeather','_getWeatherType','_getWeather','_setTimeOfDay','_getTimeOfDay','_getSunPosition','_getSunlightIntensity','_setCycleDuration','_malloc','_free']"
+        "-sEXPORTED_FUNCTIONS=['_initWorld','_setBlock','_setBlockSimple','_removeBlock','_getBlockData','_getWorldStats','_setTimeScale','_setGravity','_setAmbientTemperature','_setWind','_rewindTime','_saveSnapshot','_getPendingFragments','_addAgent','_setAgentPosition','_getAgentData','_getAgentCount','_generateFromPrompt','_teleportCamera','_setOverlay','_exportCSV','_exportGLTF','_getLastExportCSV','_getLastExportGLTF','_saveWorld','_cleanup','_tickPhysics','_tickPhysicsDelta','_setWeather','_getWeatherType','_getWeather','_setTimeOfDay','_getTimeOfDay','_getSunPosition','_getSunlightIntensity','_setCycleDuration','_malloc','_free']"
         "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','getValue','setValue','UTF8ToString','stringToUTF8','lengthBytesUTF8']"
     )
 

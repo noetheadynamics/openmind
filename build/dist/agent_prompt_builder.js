@@ -7,7 +7,8 @@
 
     const BLOCK_TYPES = [
         'AIR','STONE','DIRT','GRASS','WATER','SAND','GLASS','WOOD','LEAVES',
-        'IRON','COPPER','GOLD','STEEL','DIAMOND','COAL','BEDROCK','ASH','TNT','SNOW'
+        'IRON','COPPER','GOLD','STEEL','DIAMOND','COAL','BEDROCK','ASH','TNT','SNOW',
+        'DOOR','BUTTON','LAUNCHER','LOCK','LAMP','CHEST','SWITCH','CONVEYOR','PISTON','TRAPDOOR','FIRE'
     ];
 
     const AGENT_TOOLS = [
@@ -38,7 +39,7 @@
                         x: { type: 'integer', description: 'X coordinate (0-255)' },
                         y: { type: 'integer', description: 'Y coordinate (0-255)' },
                         z: { type: 'integer', description: 'Z coordinate (0-255)' },
-                        type: { type: 'string', description: 'Block type: STONE, DIRT, GRASS, WOOD, GLASS, SAND, WATER, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, SNOW', enum: BLOCK_TYPES.slice(1) }
+                        type: { type: 'string', description: 'Block type: ' + BLOCK_TYPES.slice(1).join(', '), enum: BLOCK_TYPES.slice(1) }
                     },
                     required: ['x', 'y', 'z', 'type']
                 }

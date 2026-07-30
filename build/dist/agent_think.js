@@ -229,7 +229,8 @@
             const { tool, args } = action;
             const typeMap = {
                 'AIR':0,'STONE':1,'DIRT':2,'GRASS':3,'WATER':4,'SAND':5,'GLASS':6,'WOOD':7,'LEAVES':8,
-                'IRON':9,'COPPER':10,'GOLD':11,'STEEL':12,'DIAMOND':13,'COAL':14,'BEDROCK':15,'ASH':16,'TNT':17,'SNOW':18
+                'IRON':9,'COPPER':10,'GOLD':11,'STEEL':12,'DIAMOND':13,'COAL':14,'BEDROCK':15,'ASH':16,'TNT':17,'SNOW':18,
+                'DOOR':30,'BUTTON':31,'LAUNCHER':32,'LOCK':33,'LAMP':34,'CHEST':35,'SWITCH':36,'CONVEYOR':37,'PISTON':38,'TRAPDOOR':39,'FIRE':40
             };
             const resolveType = (t) => typeMap[(t||'').toUpperCase()] || 1;
 

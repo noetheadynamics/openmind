@@ -11,8 +11,9 @@
     ]);
 
     const VALID_BLOCK_TYPES = new Set([
-        'STONE','DIRT','GRASS','WATER','SAND','GLASS','WOOD','LEAVES',
-        'IRON','COPPER','GOLD','STEEL','DIAMOND','COAL','SNOW','ASH','TNT'
+        'AIR','STONE','DIRT','GRASS','WATER','SAND','GLASS','WOOD','LEAVES',
+        'IRON','COPPER','GOLD','STEEL','DIAMOND','COAL','BEDROCK','ASH','TNT','SNOW',
+        'DOOR','BUTTON','LAUNCHER','LOCK','LAMP','CHEST','SWITCH','CONVEYOR','PISTON','TRAPDOOR','FIRE'
     ]);
 
     class ActionParser {

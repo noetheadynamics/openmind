@@ -39,7 +39,7 @@ Available commands:
 6. generate_world: Generate a world from description. {"action":"generate_world","prompt":"string","size":int,"baseType":"BLOCK_TYPE"} 
 7. generate_material: Generate a material definition. {"action":"generate_material","prompt":"string","name":"string","color":"#hex","mass":float,"hardness":float,"density":float,"tensileStrength":float,"meltingPoint":float}
 
-Block types: STONE, DIRT, GRASS, WATER, SAND, GLASS, WOOD, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, SNOW, DOOR, BUTTON, LAMP, CHEST, SWITCH, TRAPDOOR
+Block types: AIR, STONE, DIRT, GRASS, WATER, SAND, GLASS, WOOD, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, BEDROCK, ASH, TNT, SNOW, DOOR, BUTTON, LAUNCHER, LOCK, LAMP, CHEST, SWITCH, CONVEYOR, PISTON, TRAPDOOR, FIRE
 
 Important rules:
 - Coordinates must be 0-255. Y=0 is ground level.
@@ -332,37 +332,117 @@ Never include explanations or markdown.`;
             return { success: false, action: 'generate_world', error: 'WASM engine not ready' };
         }
         const prompt = cmd.prompt || '';
-        const size = Math.min(Math.max(cmd.size || 10, 1), 64);
+        const size = Math.min(Math.max(cmd.size || 16, 1), 64);
         const baseType = this.resolveType(cmd.baseType || 'DIRT');
         let placed = 0;
+
+        const flat = prompt.toLowerCase().includes('flat') || prompt.toLowerCase().includes('platform');
+        const water = prompt.toLowerCase().includes('water') || prompt.toLowerCase().includes('river') || prompt.toLowerCase().includes('lake') || prompt.toLowerCase().includes('ocean');
+        const hill = prompt.toLowerCase().includes('hill') || prompt.toLowerCase().includes('mountain') || prompt.toLowerCase().includes('rocky');
+        const forest = prompt.toLowerCase().includes('forest') || prompt.toLowerCase().includes('tree') || prompt.toLowerCase().includes('wood');
+        const desert = prompt.toLowerCase().includes('desert') || prompt.toLowerCase().includes('sand') || prompt.toLowerCase().includes('arid');
+        const snow = prompt.toLowerCase().includes('snow') || prompt.toLowerCase().includes('ice') || prompt.toLowerCase().includes('frozen') || prompt.toLowerCase().includes('tundra');
+        const cave = prompt.toLowerCase().includes('cave') || prompt.toLowerCase().includes('underground') || prompt.toLowerCase().includes('cavern');
+        const city = prompt.toLowerCase().includes('city') || prompt.toLowerCase().includes('town') || prompt.toLowerCase().includes('village') || prompt.toLowerCase().includes('house');
+
+        const floorType = desert ? this.resolveType('SAND') : snow ? this.resolveType('SNOW') : baseType;
+        const fillType = cave ? this.resolveType('STONE') : floorType;
+
         for (let x = 0; x < size; x++) {
             for (let z = 0; z < size; z++) {
-                this.engine.setBlock(x, 1, z, baseType);
+                this.engine.setBlock(x, 0, z, this.resolveType('BEDROCK'));
                 placed++;
-            }
-        }
-        if (prompt.toLowerCase().includes('water') || prompt.toLowerCase().includes('river')) {
-            for (let x = Math.floor(size * 0.3); x < Math.floor(size * 0.7); x++) {
-                for (let z = 0; z < size; z++) {
-                    this.engine.setBlock(x, 2, z, 4);
+                if (!cave || (x + z) % 4 !== 0) {
+                    this.engine.setBlock(x, 1, z, fillType);
                     placed++;
                 }
             }
         }
-        if (prompt.toLowerCase().includes('hill') || prompt.toLowerCase().includes('mountain')) {
+
+        if (hill) {
             const cx = Math.floor(size / 2), cz = Math.floor(size / 2);
-            for (let r = 0; r < Math.floor(size / 3); r++) {
-                for (let x = -r; x <= r; x++) {
-                    for (let z = -r; z <= r; z++) {
-                        const h = Math.floor((size / 3) - r) + 1;
-                        for (let y = 1; y <= h; y++) {
-                            this.engine.setBlock(cx + x, y, cz + z, baseType);
+            const peakHeight = Math.min(Math.floor(size / 2), 12);
+            const hillType = snow && peakHeight > 4 ? this.resolveType('SNOW') : this.resolveType('STONE');
+            for (let y = 2; y <= peakHeight; y++) {
+                const r = Math.max(1, Math.floor((peakHeight - y) * size / peakHeight / 2));
+                for (let dx = -r; dx <= r; dx++) {
+                    for (let dz = -r; dz <= r; dz++) {
+                        if (dx * dx + dz * dz <= r * r) {
+                            const bx = cx + dx, bz = cz + dz;
+                            if (bx >= 0 && bx < size && bz >= 0 && bz < size) {
+                                this.engine.setBlock(bx, y, bz, y > peakHeight * 0.7 ? hillType : this.resolveType('STONE'));
+                                placed++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (water) {
+            const wSize = Math.floor(size * 0.4);
+            const wx = Math.floor((size - wSize) / 2);
+            for (let x = wx; x < wx + wSize; x++) {
+                for (let z = 0; z < size; z++) {
+                    for (let y = 1; y <= 2; y++) {
+                        this.engine.setBlock(x, y, z, this.resolveType('WATER'));
+                        placed++;
+                    }
+                }
+            }
+        }
+
+        if (forest) {
+            const treeType = this.resolveType('WOOD');
+            const leafType = this.resolveType('LEAVES');
+            for (let i = 0; i < Math.floor(size / 3); i++) {
+                const tx = Math.floor(Math.random() * size);
+                const tz = Math.floor(Math.random() * size);
+                const trunkH = 2 + Math.floor(Math.random() * 3);
+                for (let y = 2; y <= 2 + trunkH; y++) {
+                    this.engine.setBlock(tx, y, tz, treeType);
+                    placed++;
+                }
+                for (let dx = -2; dx <= 2; dx++) {
+                    for (let dz = -2; dz <= 2; dz++) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            const ly = 2 + trunkH + dy;
+                            if (ly >= 2 && Math.abs(dx) + Math.abs(dz) <= 2 + dy) {
+                                const lx = tx + dx, lz = tz + dz;
+                                if (lx >= 0 && lx < size && lz >= 0 && lz < size) {
+                                    this.engine.setBlock(lx, ly, lz, leafType);
+                                    placed++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (city) {
+            const wallType = this.resolveType('STONE');
+            const roofType = this.resolveType('WOOD');
+            for (let i = 0; i < Math.floor(size / 5); i++) {
+                const bx = 2 + Math.floor(Math.random() * (size - 6));
+                const bz = 2 + Math.floor(Math.random() * (size - 6));
+                const bw = 3 + Math.floor(Math.random() * 3);
+                const bh = 2 + Math.floor(Math.random() * 3);
+                for (let x = bx; x < bx + bw; x++) {
+                    for (let z = bz; z < bz + bw; z++) {
+                        for (let y = 1; y <= bh; y++) {
+                            if (y === bh) {
+                                this.engine.setBlock(x, y, z, roofType);
+                            } else if (x === bx || x === bx + bw - 1 || z === bz || z === bz + bw - 1) {
+                                this.engine.setBlock(x, y, z, wallType);
+                            }
                             placed++;
                         }
                     }
                 }
             }
         }
+
         this.engine.tick(0.1);
         return { success: true, action: 'generate_world', message: `Generated world "${prompt.substring(0, 40)}" with ${placed} blocks`, blocksPlaced: placed };
     }

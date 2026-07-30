@@ -313,7 +313,6 @@
             if (a) {
                 try { a.source.stop(); } catch (e) {}
                 this.ambientSources.delete(type);
-                this.sourceCount--;
             }
         }
 

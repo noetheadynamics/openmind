@@ -147,6 +147,67 @@ class LLMClient {
                         required: ['x1', 'y1', 'z1', 'x2', 'y2', 'z2']
                     }
                 }
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'move_to',
+                    description: 'Move the agent to a coordinate position.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            x: { type: 'integer', description: 'Target X' },
+                            y: { type: 'integer', description: 'Target Y' },
+                            z: { type: 'integer', description: 'Target Z' }
+                        },
+                        required: ['x', 'y', 'z']
+                    }
+                }
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'place_block',
+                    description: 'Place a single block at a coordinate.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            x: { type: 'integer', description: 'X coordinate' },
+                            y: { type: 'integer', description: 'Y coordinate' },
+                            z: { type: 'integer', description: 'Z coordinate' },
+                            type: { type: 'string', description: 'Block type' }
+                        },
+                        required: ['x', 'y', 'z', 'type']
+                    }
+                }
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'observe',
+                    description: 'Observe the surrounding area within a radius. Returns block type counts.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            radius: { type: 'integer', description: 'Observation radius (1-20)' }
+                        },
+                        required: ['radius']
+                    }
+                }
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'report',
+                    description: 'Report a status message or summary of what was done.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            message: { type: 'string', description: 'The report message' }
+                        },
+                        required: ['message']
+                    }
+                }
             }
         ];
 
@@ -295,6 +356,22 @@ RULES:
                         }
                 return `Cleared ${cleared} blocks in (${x1},${y1},${z1})-(${x2},${y2},${z2}).`;
             }
+            case 'move_to': {
+                return `Agent moved to (${args.x},${args.y},${args.z})`;
+            }
+            case 'place_block': {
+                const px = Math.round(args.x), py = Math.round(args.y), pz = Math.round(args.z);
+                if (px < 0 || px >= 256 || py < 0 || py >= 256 || pz < 0 || pz >= 256) return 'Coordinates out of bounds (0-255)';
+                const pt = this.resolveType(args.type);
+                this.engine.setBlock(px, py, pz, pt);
+                return `Placed ${args.type} at (${px},${py},${pz})`;
+            }
+            case 'observe': {
+                const radius = Math.min(args.radius || 5, 20);
+                return `Observing radius ${radius} around current position.`;
+            }
+            case 'report':
+                return `Report: ${args.message || 'done'}`;
             default:
                 return `Unknown tool: ${name}`;
         }

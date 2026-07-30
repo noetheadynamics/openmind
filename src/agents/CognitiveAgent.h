@@ -9,8 +9,6 @@
 #include "LLMInterface.h"
 #include "VoxelOctree.h"
 #include "PhysicsEngine.h"
-#include "PromptTemplates.h"
-#include "JSONValidator.h"
 #include <string>
 #include <sstream>
 

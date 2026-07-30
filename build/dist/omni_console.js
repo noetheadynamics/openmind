@@ -67,10 +67,24 @@ class OmniConsole {
         if (this.agentInterval) { clearInterval(this.agentInterval); this.agentInterval = null; }
         if (this._exportProgressInterval) { clearInterval(this._exportProgressInterval); this._exportProgressInterval = null; }
         if (this._ecoGraphRaf) { cancelAnimationFrame(this._ecoGraphRaf); this._ecoGraphRaf = null; }
+        if (this._simLoopTimeout) { clearTimeout(this._simLoopTimeout); this._simLoopTimeout = null; }
         if (this.shortcuts) this.shortcuts.destroy();
         if (this.liveStats) this.liveStats.stop();
         if (this.worldIO) this.worldIO.stopAutoSave();
         if (this.tutorial) this.tutorial.removeUI();
+        if (this.renderer) { this.renderer.stop(); this.renderer.destroy(); }
+        if (this.sound) this.sound.destroy();
+        if (this.skybox && this.skybox.destroy) this.skybox.destroy();
+        if (this.water && this.water.destroy) this.water.destroy();
+        if (this.blueprints && this.blueprints.destroy) this.blueprints.destroy();
+        if (this.symmetry) this.symmetry.destroy();
+        if (this.copyPaste) this.copyPaste.clearGhost();
+        if (this.selection && this.selection.destroy) this.selection.destroy();
+        if (this.notifications && this.notifications.destroy) this.notifications.destroy();
+        if (this.touchControls) this.touchControls.destroy();
+        if (this.agentManager && this.agentManager.stopAll) this.agentManager.stopAll();
+        if (this.interactive) this.interactive.signals = [];
+        if (this.engine) this.engine.cleanup();
     }
 
     async init() {
@@ -1265,13 +1279,13 @@ class OmniConsole {
         const STORAGE_KEY = 'openmind_brain_config';
 
         const saveBrainConfig = (config) => {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+            try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
         };
         const loadBrainConfig = () => {
-            try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null; } catch (e) { return null; }
+            try { const d = sessionStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null; } catch (e) { return null; }
         };
         const clearBrainConfig = () => {
-            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+            try { sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
             const dot = document.getElementById('brainStatusDot');
             const text = document.getElementById('brainStatusText');
             if (dot) dot.style.background = '';
