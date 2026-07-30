@@ -326,7 +326,7 @@ class TouchControls {
         const invBtn = this._makeActionBtn('tc-btn-inv', '◻', 'Inventory');
         invBtn.addEventListener('touchstart', (e) => {
             e.preventDefault(); this._ripple(invBtn);
-            const panel = document.getElementById('inventory-panel');
+            const panel = document.getElementById('panel-inventory');
             if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         });
 
@@ -551,7 +551,7 @@ class TouchControls {
     }
 
     _placeBlock() {
-        if (this.onBlockPlace) this.onBlockPlace();
+        if (this.onBlockPlace) { this.onBlockPlace(); return; }
         if (this.renderer?.hitBlock) {
             const h = this.renderer.hitBlock;
             if (h) {
@@ -562,7 +562,7 @@ class TouchControls {
     }
 
     _breakBlock() {
-        if (this.onBlockBreak) this.onBlockBreak();
+        if (this.onBlockBreak) { this.onBlockBreak(); return; }
         if (this.renderer?.hitBlock) {
             const h = this.renderer.hitBlock;
             if (h) this.engine?.setBlock(h.x, h.y, h.z, 0);

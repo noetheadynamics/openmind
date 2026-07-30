@@ -92,7 +92,9 @@ class EngineConnection {
     }
 
     generateFromPrompt(prompt) {
-        return this.call('generateFromPrompt', 'number', ['string'], [prompt]);
+        const result = this.call('generateFromPrompt', 'number', ['string'], [prompt]);
+        if (this.renderer) this.renderer.dirty = true;
+        return result;
     }
 
     setTimeOfDay(hours) { this.call('setTimeOfDay', null, ['number'], [hours]); }

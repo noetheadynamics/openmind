@@ -80,12 +80,6 @@
         showGhost(x, y, z) {
             this.clearGhost();
             if (!this.clipboard || !this.scene) return;
-            const geo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-            const mat = new THREE.MeshBasicMaterial({
-                color: 0x8b5cf6, transparent: true, opacity: 0.3, depthWrite: false
-            });
-            const wireMat = new THREE.LineBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.6 });
-            const edgeGeo = new THREE.EdgesGeometry(geo);
             for (const block of this.clipboard.blocks) {
                 let bx = block.x, by = block.y, bz = block.z;
                 for (let r = 0; r < this.rotation; r++) {
@@ -96,8 +90,14 @@
                 if (this.flipY) by = (this.clipboard.height - 1) - by;
                 if (this.flipZ) bz = (this.clipboard.depth - 1) - bz;
                 if (block.type > 0) {
+                    const geo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+                    const mat = new THREE.MeshBasicMaterial({
+                        color: 0x8b5cf6, transparent: true, opacity: 0.3, depthWrite: false
+                    });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(x + bx + 0.5, y + by + 0.5, z + bz + 0.5);
+                    const edgeGeo = new THREE.EdgesGeometry(geo);
+                    const wireMat = new THREE.LineBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.6 });
                     const wire = new THREE.LineSegments(edgeGeo, wireMat);
                     mesh.add(wire);
                     this.scene.add(mesh);
@@ -109,8 +109,8 @@
         clearGhost() {
             for (const m of this.ghostMeshes) {
                 if (this.scene) this.scene.remove(m);
-                m.geometry.dispose();
-                m.material.dispose();
+                if (m.geometry) m.geometry.dispose();
+                if (m.material) m.material.dispose();
             }
             this.ghostMeshes = [];
         }

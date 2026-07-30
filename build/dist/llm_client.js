@@ -18,7 +18,7 @@ class LLMClient {
         this.onToolCall = null;
 
         this.typeMap = {
-            'STONE': 1, 'DIRT': 2, 'GRASS': 3, 'WATER': 4, 'SAND': 5,
+            'AIR': 0, 'STONE': 1, 'DIRT': 2, 'GRASS': 3, 'WATER': 4, 'SAND': 5,
             'GLASS': 6, 'WOOD': 7, 'LEAVES': 8, 'IRON': 9, 'COPPER': 10,
             'GOLD': 11, 'STEEL': 12, 'DIAMOND': 13, 'COAL': 14, 'BEDROCK': 15,
             'SNOW': 18, 'ASH': 16, 'TNT': 17, 'DOOR': 30, 'BUTTON': 31,
@@ -44,7 +44,7 @@ class LLMClient {
                                         x: { type: 'integer', description: 'X coordinate 0-255' },
                                         y: { type: 'integer', description: 'Y coordinate 0-255 (0=ground, up)' },
                                         z: { type: 'integer', description: 'Z coordinate 0-255' },
-                                        type: { type: 'string', description: 'Block type: STONE, DIRT, GRASS, WATER, SAND, GLASS, WOOD, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, SNOW, DOOR, BUTTON, LAMP, CHEST, SWITCH, TRAPDOOR' }
+                                        type: { type: 'string', description: 'Block type: AIR, STONE, DIRT, GRASS, WATER, SAND, GLASS, WOOD, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, BEDROCK, ASH, TNT, SNOW, DOOR, BUTTON, LAUNCHER, LOCK, LAMP, CHEST, SWITCH, CONVEYOR, PISTON, TRAPDOOR, FIRE' }
                                     },
                                     required: ['x', 'y', 'z', 'type']
                                 }
@@ -154,7 +154,7 @@ class LLMClient {
 
 COORDINATE SYSTEM: x=0-255 (east-west), y=0-255 (up, y=1 is ground level), z=0-255 (north-south).
 
-Available block types: STONE, DIRT, GRASS, WATER, SAND, GLASS, WOOD, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, SNOW, DOOR, BUTTON, LAMP, CHEST, SWITCH, TRAPDOOR
+Available block types: AIR, STONE, DIRT, GRASS, WATER, SAND, GLASS, WOOD, LEAVES, IRON, COPPER, GOLD, STEEL, DIAMOND, COAL, BEDROCK, ASH, TNT, SNOW, DOOR, BUTTON, LAUNCHER, LOCK, LAMP, CHEST, SWITCH, CONVEYOR, PISTON, TRAPDOOR, FIRE
 
 BUILDING STRATEGY:
 1. Start with a floor/foundation using fill_rect
@@ -256,15 +256,18 @@ RULES:
                 return `Hollow rect (${x1},${y1},${z1}) to (${x2},${y2},${z2}) with ${args.type}: ${placed} blocks placed (walls only).`;
             }
             case 'get_block': {
-                const t = this.engine.getBlock(args.x, args.y, args.z);
+                const gx = Math.round(args.x), gy = Math.round(args.y), gz = Math.round(args.z);
+                if (gx < 0 || gx >= 256 || gy < 0 || gy >= 256 || gz < 0 || gz >= 256) return 'Out of bounds (0-255)';
+                const t = this.engine.getBlock(gx, gy, gz);
                 const typeName = Object.keys(this.typeMap).find(k => this.typeMap[k] === t) || 'UNKNOWN';
-                return `Block at (${args.x},${args.y},${args.z}): type=${t} (${typeName})`;
+                return `Block at (${gx},${gy},${gz}): type=${t} (${typeName})`;
             }
             case 'survey_area': {
                 const counts = {};
                 const x1 = Math.min(args.x1, args.x2), x2 = Math.max(args.x1, args.x2);
                 const y1 = Math.min(args.y1, args.y2), y2 = Math.max(args.y1, args.y2);
                 const z1 = Math.min(args.z1, args.z2), z2 = Math.max(args.z1, args.z2);
+                if (x1 < 0 || x2 >= 256 || y1 < 0 || y2 >= 256 || z1 < 0 || z2 >= 256) return 'Survey area out of bounds (0-255)';
                 let total = 0;
                 for (let x = x1; x <= x2; x++)
                     for (let y = y1; y <= y2; y++)
@@ -281,6 +284,7 @@ RULES:
                 const x1 = Math.min(args.x1, args.x2), x2 = Math.max(args.x1, args.x2);
                 const y1 = Math.min(args.y1, args.y2), y2 = Math.max(args.y1, args.y2);
                 const z1 = Math.min(args.z1, args.z2), z2 = Math.max(args.z1, args.z2);
+                if (x1 < 0 || x2 >= 256 || y1 < 0 || y2 >= 256 || z1 < 0 || z2 >= 256) return 'Clear area out of bounds (0-255)';
                 for (let x = x1; x <= x2; x++)
                     for (let y = y1; y <= y2; y++)
                         for (let z = z1; z <= z2; z++) {
@@ -337,7 +341,28 @@ RULES:
             }
 
             if (response.toolCalls && response.toolCalls.length > 0) {
-                messages.push({ role: 'assistant', content: response.text || null, tool_calls: response.toolCalls });
+                if (this.provider === 'anthropic') {
+                    const anthropicContent = [];
+                    if (response.text) anthropicContent.push({ type: 'text', text: response.text });
+                    for (const tc of response.toolCalls) {
+                        anthropicContent.push({
+                            type: 'tool_use', id: tc.id,
+                            name: tc.function.name,
+                            input: JSON.parse(tc.function.arguments || '{}')
+                        });
+                    }
+                    messages.push({ role: 'assistant', content: anthropicContent });
+                } else if (this.provider === 'google') {
+                    const parts = [];
+                    if (response.text) parts.push({ text: response.text });
+                    for (const tc of response.toolCalls) {
+                        const tcArgs = JSON.parse(tc.function.arguments || '{}');
+                        parts.push({ functionCall: { name: tc.function.name, args: tcArgs } });
+                    }
+                    messages.push({ role: 'model', parts });
+                } else {
+                    messages.push({ role: 'assistant', content: response.text || null, tool_calls: response.toolCalls });
+                }
 
                 for (const tc of response.toolCalls) {
                     const fnName = tc.function.name;
@@ -361,11 +386,15 @@ RULES:
                         if (match) totalBlocksPlaced += parseInt(match[1]);
                     }
 
-                    messages.push({
-                        role: 'tool',
-                        tool_call_id: tc.id,
-                        content: result
-                    });
+                    if (this.provider === 'anthropic') {
+                        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: tc.id, content: result }] });
+                    } else if (this.provider === 'google') {
+                        let parsedResult;
+                        try { parsedResult = JSON.parse(result); } catch (e) { parsedResult = { text: result }; }
+                        messages.push({ role: 'function', parts: [{ functionResponse: { name: fnName, response: parsedResult } }] });
+                    } else {
+                        messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+                    }
                 }
             } else {
                 if (this.renderer) {
@@ -500,10 +529,14 @@ RULES:
         const timeout = setTimeout(() => controller.abort(), 60000);
         try {
             const url = this.endpoint + '/' + this.model + ':generateContent';
-            const contents = messages.filter(m => m.role !== 'system').map(m => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content || '' }]
-            }));
+            const roleMap = { assistant: 'model', user: 'user', model: 'model', function: 'function' };
+            const contents = [];
+            for (const m of messages) {
+                if (m.role === 'system') continue;
+                const role = roleMap[m.role] || 'user';
+                const parts = m.parts || (m.content ? [{ text: m.content }] : []);
+                if (parts.length > 0) contents.push({ role, parts });
+            }
 
             const functionDecls = this.agentTools.map(t => ({
                 name: t.function.name,

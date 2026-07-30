@@ -29,12 +29,11 @@
             this.running = true;
             this._iteration = 0;
             this._tick();
-            this._timer = setInterval(() => this._tick(), this.intervalMs);
         }
 
         stop() {
             this.running = false;
-            if (this._timer) { clearInterval(this._timer); this._timer = null; }
+            if (this._timer) { clearTimeout(this._timer); this._timer = null; }
         }
 
         async _tick() {
@@ -52,6 +51,9 @@
                 console.error('[AgentThink] Error:', e);
                 if (this.onError) this.onError(e.message);
                 this.agent.addMemory('error', `Thinking error: ${e.message}`);
+            }
+            if (this.running) {
+                this._timer = setTimeout(() => this._tick(), this.intervalMs);
             }
         }
 
@@ -226,15 +228,15 @@
             if (!this.engine || !this.engine.wasmReady) return 'Error: Engine not ready';
             const { tool, args } = action;
             const typeMap = {
-                'STONE':1,'DIRT':2,'GRASS':3,'WATER':4,'SAND':5,'GLASS':6,'WOOD':7,'LEAVES':8,
-                'IRON':9,'COPPER':10,'GOLD':11,'STEEL':12,'DIAMOND':13,'COAL':14,'BEDROCK':15,'SNOW':18
+                'AIR':0,'STONE':1,'DIRT':2,'GRASS':3,'WATER':4,'SAND':5,'GLASS':6,'WOOD':7,'LEAVES':8,
+                'IRON':9,'COPPER':10,'GOLD':11,'STEEL':12,'DIAMOND':13,'COAL':14,'BEDROCK':15,'ASH':16,'TNT':17,'SNOW':18
             };
             const resolveType = (t) => typeMap[(t||'').toUpperCase()] || 1;
 
             switch (tool) {
                 case 'move_to': {
-                    this.agent.x = args.x; this.agent.y = args.y || 2; this.agent.z = args.z;
-                    return `Moved to (${args.x}, ${args.y || 2}, ${args.z})`;
+                    this.agent.x = args.x; this.agent.y = args.y !== undefined ? args.y : 2; this.agent.z = args.z;
+                    return `Moved to (${args.x}, ${this.agent.y}, ${args.z})`;
                 }
                 case 'place_block': {
                     const t = resolveType(args.type);

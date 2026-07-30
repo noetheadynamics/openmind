@@ -57,6 +57,9 @@ class OmniConsole {
         this.speedLabels = ['0.1x', '0.25x', '0.5x', '1x', '2x', '5x', '10x', '100x'];
         this._exportProgressInterval = null;
         this._simLoopTimeout = null;
+        this._simLoopToken = 0;
+        this._skyUpdateCount = 0;
+        this._waterUpdateCount = 0;
     }
 
     destroy() {
@@ -104,6 +107,16 @@ class OmniConsole {
                 this.addChatMessage('assistant', 'Pasted clipboard');
             }
         });
+        for (let i = 1; i <= 9; i++) {
+            const idx = i;
+            this.shortcuts.register('hotbar_' + i, () => {
+                if (this.renderer) {
+                    this.renderer.hotbarIndex = idx;
+                    this.renderer.selectedBlockType = this.renderer.blockTypes.filter(b => b.id !== 0)[idx - 1]?.id || 1;
+                    this.renderer.updateHotbar();
+                }
+            });
+        }
         this.shortcuts.register('save', async () => {
             try { await this.worldIO.save('auto'); } catch (e) { this.addChatMessage('assistant', 'Save failed'); }
         });
@@ -139,6 +152,7 @@ class OmniConsole {
                 this.engine.setTimeOfDay(6);
                 this.renderer = new VoxelRenderer('viewport3d');
                 this.renderer.start(this.engine);
+                this.engine.renderer = this.renderer;
                 this.worldEditor = new WorldEditor(this.renderer, this.engine);
                 this.worldEditor.createGhostMesh();
                 this.renderer.setWorldEditor(this.worldEditor);
@@ -245,6 +259,7 @@ class OmniConsole {
         this.statsVisible = true;
         const statsOverlay = document.getElementById('statsOverlay');
         if (statsOverlay) statsOverlay.style.display = '';
+        this._simLoopToken++;
         this.simLoop();
     }
 
@@ -254,6 +269,7 @@ class OmniConsole {
     }
 
     simLoop() {
+        const token = this._simLoopToken;
         if (!this.engine.simRunning) return;
         if (!this.engine.paused) {
             const now = performance.now();
@@ -270,14 +286,14 @@ class OmniConsole {
                         ? (typeof requestIdleCallback !== 'undefined')
                         : true;
                     const updateSkyWater = () => {
-                        this._skyUpdateCount = (this._skyUpdateCount || 0) + 1;
+                        this._skyUpdateCount++;
                         if (this.skybox && this._skyUpdateCount % 4 === 0) {
                             const tod = this.engine.getTimeOfDay();
                             const w = this.engine.getWeather();
                             const wn = this.engine.weatherNames[w.type] || 'clear';
                             this.skybox.update(dt, tod, wn);
                         }
-                        this._waterUpdateCount = (this._waterUpdateCount || 0) + 1;
+                        this._waterUpdateCount++;
                         if (this.water && this._waterUpdateCount % 2 === 0) {
                             const tod = this.engine.getTimeOfDay();
                             const w = this.engine.getWeather();
@@ -296,7 +312,7 @@ class OmniConsole {
                 this.lastTickTime = now;
             }
         }
-        this._simLoopTimeout = setTimeout(() => this.simLoop(), this._mobileUseIdleCallback ? 300 : 200);
+        this._simLoopTimeout = setTimeout(() => { if (this._simLoopToken === token && this.engine.simRunning) this.simLoop(); }, this._mobileUseIdleCallback ? 300 : 200);
     }
 
     updateStats() {
@@ -478,7 +494,7 @@ class OmniConsole {
                     if (this.promptBridge) {
                         const bridgeResult = await this.promptBridge.process(text);
                         if (bridgeResult.success && bridgeResult.results && bridgeResult.results.some(r => r.success)) {
-                            this.renderer.dirty = true;
+                            this.renderer.updateFromWASM();
                             this.renderer.rebuildMesh();
                             this.updateStats();
                             this.addChatMessage('assistant', bridgeResult.summary);
@@ -493,9 +509,11 @@ class OmniConsole {
                     if (result.success) {
                         if (result.blocks && result.blocks.length > 0) {
                             const placed = await this.llm.executeBlocks(result.blocks);
+                            if (this.renderer) { this.renderer.updateFromWASM(); this.renderer.rebuildMesh(); }
                             this.engine.tick(0.1);
                             this.addChatMessage('assistant', 'Generated ' + placed + ' blocks via ' + this.llm.provider + '.');
                         } else if (result.totalBlocksPlaced > 0) {
+                            if (this.renderer) { this.renderer.updateFromWASM(); this.renderer.rebuildMesh(); }
                             this.engine.tick(0.1);
                             const tools = result.toolsUsed?.length ? ` Used: ${result.toolsUsed.join(', ')}.` : '';
                             this.addChatMessage('assistant', `Built ${result.totalBlocksPlaced} blocks in ${result.iterations} steps.${tools}\n${result.text || ''}`);

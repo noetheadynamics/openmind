@@ -528,10 +528,9 @@ class VoxelRenderer {
     rebuildMesh() {
         if (!this.dirty || !window.THREE || !this.scene) return;
         this.dirty = false;
-        this.scene.traverse((c) => { if (c.isInstancedMesh || c.isGroup) { if (c.geometry && c.geometry !== this.boxGeometry) c.geometry.dispose(); if (c.material) c.material.dispose(); } });
         const toRemove = [];
-        this.scene.traverse((c) => { if (c.isGroup || c.isInstancedMesh) toRemove.push(c); });
-        toRemove.forEach(c => this.scene.remove(c));
+        this.scene.traverse((c) => { if (c.userData && c.userData.isVoxelGroup) toRemove.push(c); });
+        toRemove.forEach(c => { this.scene.remove(c); c.traverse((ch) => { if (ch.isInstancedMesh) { if (ch.geometry && ch.geometry !== this.boxGeometry) ch.geometry.dispose(); if (ch.material) ch.material.dispose(); } }); });
         if (this.blocks.size === 0) return;
 
         if (!this.boxGeometry) this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -542,6 +541,7 @@ class VoxelRenderer {
         });
 
         const group = new THREE.Group();
+        group.userData.isVoxelGroup = true;
         colorMap.forEach((blocks, type) => {
             const color = this.getBlockColor(type);
             const isTransp = this.isBlockTransparent(type);

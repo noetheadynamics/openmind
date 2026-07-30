@@ -7,6 +7,7 @@ class WorldIO {
         this.renderer = null;
         this.autoSaveInterval = null;
         this.lastAutoSave = null;
+        this._autoSaveBusy = false;
     }
 
     async init() {
@@ -37,9 +38,30 @@ class WorldIO {
     }
 
     async autoSave() {
-        if (!this.engine || !this.engine.wasmReady) return;
-        await this.save('__autosave');
-        this.lastAutoSave = new Date();
+        if (!this.engine || !this.engine.wasmReady || this._autoSaveBusy) return;
+        this._autoSaveBusy = true;
+        try { await this.save('__autosave'); this.lastAutoSave = new Date(); }
+        finally { this._autoSaveBusy = false; }
+    }
+
+    async _scanBlocks(step) {
+        const blocks = [];
+        const chunkSize = 16384;
+        let pending = 0;
+        for (let x = 0; x < 256; x += step) {
+            for (let y = 0; y < 256; y += step) {
+                for (let z = 0; z < 256; z += step) {
+                    const data = this.engine.getBlock(x, y, z);
+                    if (data && data.exists && data.blockType !== 0) {
+                        blocks.push({ x, y, z, type: data.blockType });
+                    }
+                    if (blocks.length > 0 && blocks.length % chunkSize === 0) {
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+                }
+            }
+        }
+        return blocks;
     }
 
     async save(name) {
@@ -48,18 +70,7 @@ class WorldIO {
             try { await this.init(); } catch (e) { return { success: false, error: 'DB init failed: ' + e.message }; }
         }
 
-        const blocks = [];
-        const step = 1;
-        for (let x = 0; x < 256; x += step) {
-            for (let y = 0; y < 256; y += step) {
-                for (let z = 0; z < 256; z += step) {
-                    const data = this.engine.getBlock(x, y, z);
-                    if (data && data.exists && data.blockType !== 0) {
-                        blocks.push({ x, y, z, type: data.blockType });
-                    }
-                }
-            }
-        }
+        const blocks = await this._scanBlocks(2);
 
         const worldData = {
             name,
@@ -138,17 +149,8 @@ class WorldIO {
     async exportOMW(name) {
         if (!this.engine || !this.engine.wasmReady) return { success: false, error: 'Engine not ready' };
 
-        const blocks = [];
-        for (let x = 0; x < 256; x++) {
-            for (let y = 0; y < 256; y++) {
-                for (let z = 0; z < 256; z++) {
-                    const data = this.engine.getBlock(x, y, z);
-                    if (data && data.exists && data.blockType !== 0) {
-                        blocks.push([x, y, z, data.blockType]);
-                    }
-                }
-            }
-        }
+        const rawBlocks = await this._scanBlocks(1);
+        const blocks = rawBlocks.map(b => [b.x, b.y, b.z, b.type]);
 
         const omw = {
             format: 'OpenMindWorld',
