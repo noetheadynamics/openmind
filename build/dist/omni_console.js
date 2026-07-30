@@ -22,6 +22,7 @@ class OmniConsole {
         this.shortcuts = new Shortcuts();
         this.tutorial = null;
         this.settingsPanel = new SettingsPanel();
+        this.worldEditor = null;
         this.selection = new Selection();
         this.copyPaste = new CopyPaste();
         this.blueprints = new BlueprintSystem();
@@ -33,6 +34,7 @@ class OmniConsole {
         this.activePanel = 'prompt';
         this.promptHistory = [];
         this.historyIndex = -1;
+        this.promptBridge = null;
         this.bookmarks = [];
         this.forgeHistory = [];
         this.currentEnv = 'earth';
@@ -118,6 +120,9 @@ class OmniConsole {
                 this.engine.setTimeOfDay(6);
                 this.renderer = new VoxelRenderer('viewport3d');
                 this.renderer.start(this.engine);
+                this.worldEditor = new WorldEditor(this.renderer, this.engine);
+                this.worldEditor.createGhostMesh();
+                this.renderer.setWorldEditor(this.worldEditor);
                 if (this.renderer.scene && this.renderer.camera) {
                     this.skybox = new OpenMindSkybox(this.renderer.scene);
                     this.water = new WaterRenderer(this.renderer.scene, this.renderer.camera);
@@ -135,6 +140,7 @@ class OmniConsole {
                 });
                 this.llm.engine = this.engine;
                 this.llm.renderer = this.renderer;
+                this.promptBridge = new PromptBridge(this.llm, this.engine, { console: this });
                 if (this.agentManager) {
                     this.agentManager.setLLM(this.llm);
                     this.agentManager.setEngine(this.engine);
@@ -414,6 +420,16 @@ class OmniConsole {
                     this.llm.setConfig(provider, inputKey, endpoint || '', model || '');
                 }
                 if (this.llm.apiKey) {
+                    if (this.promptBridge) {
+                        const bridgeResult = await this.promptBridge.process(text);
+                        if (bridgeResult.success && bridgeResult.results && bridgeResult.results.some(r => r.success)) {
+                            this.renderer.dirty = true;
+                            this.renderer.rebuildMesh();
+                            this.updateStats();
+                            this.addChatMessage('assistant', bridgeResult.summary);
+                            return;
+                        }
+                    }
                     this.llm.onToolCall = (name, args) => {
                         this.addChatMessage('assistant', `Tool: ${name}(${JSON.stringify(args).substring(0, 120)}...)`);
                     };

@@ -210,25 +210,26 @@ class VoxelRenderer {
             this.isRightDrag = false;
             this.isLeftDrag = false;
 
-            if (!wasDragging && e.button === 0) {
-                if (e.shiftKey) {
-                    this.removeBlock();
+            if (wasDragging) return;
+
+            if (e.button === 0 && !e.shiftKey) {
+                if (this.worldEditor) {
+                    this.worldEditor.placeBlock();
                 } else {
-                    const target = this.getTargetBlock();
-                    if (target) {
-                        const bt = this.blockTypes.find(b => b.id === this.getBlockAt(target.x, target.y, target.z)?.type);
-                        if (bt && bt.interactive) {
-                            this.interact(target.x, target.y, target.z, bt);
-                        } else {
-                            this.placeBlock();
-                        }
-                    }
+                    this.placeBlock();
+                }
+            } else if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+                if (this.worldEditor) {
+                    this.worldEditor.removeBlock();
+                } else {
+                    this.removeBlock();
                 }
             }
         });
 
-        el.addEventListener('mouseleave', () => { this.isDragging = false; this.isRightDrag = false; this.isLeftDrag = false; this.highlightMesh.visible = false; });
         el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        el.addEventListener('mouseleave', () => { this.isDragging = false; this.isRightDrag = false; this.isLeftDrag = false; this.highlightMesh.visible = false; });
 
         el.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -489,6 +490,8 @@ class VoxelRenderer {
     }
 
     setEngine(engine) { this.engine = engine; }
+
+    setWorldEditor(editor) { this.worldEditor = editor; }
 
     updateFromWASM() {
         if (!this.engine || !this.engine.wasmReady) return;
