@@ -9,6 +9,8 @@
         'ctrl+z': { action: 'undo', description: 'Undo', category: 'Edit' },
         'ctrl+y': { action: 'redo', description: 'Redo', category: 'Edit' },
         'ctrl+shift+z': { action: 'redo', description: 'Redo', category: 'Edit' },
+        'ctrl+c': { action: 'copy', description: 'Copy Selection', category: 'Edit' },
+        'ctrl+v': { action: 'paste', description: 'Paste Clipboard', category: 'Edit' },
         'ctrl+s': { action: 'save', description: 'Save World', category: 'File' },
         'ctrl+o': { action: 'load', description: 'Load World', category: 'File' },
         'ctrl+n': { action: 'new', description: 'New World', category: 'File' },

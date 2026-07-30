@@ -89,6 +89,19 @@ class OmniConsole {
         this.shortcuts.init();
         this.shortcuts.register('undo', () => this.undoRedo.undo());
         this.shortcuts.register('redo', () => this.undoRedo.redo());
+        this.shortcuts.register('copy', () => {
+            if (this.selection && this.selection.blocks.size > 0) {
+                this.copyPaste.copy(this.selection);
+                this.addChatMessage('assistant', 'Copied ' + this.selection.blocks.size + ' blocks');
+            }
+        });
+        this.shortcuts.register('paste', () => {
+            if (this.copyPaste.hasClipboard()) {
+                this.copyPaste.paste(0, 2, 0, this.selection);
+                if (this.renderer) { this.renderer.dirty = true; this.renderer.rebuildMesh(); }
+                this.addChatMessage('assistant', 'Pasted clipboard');
+            }
+        });
         this.shortcuts.register('save', async () => {
             try { await this.worldIO.save('auto'); } catch (e) { this.addChatMessage('assistant', 'Save failed'); }
         });
