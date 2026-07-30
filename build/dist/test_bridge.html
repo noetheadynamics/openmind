@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM Bridge Test</title>
+    <style>
+        body { background: #0a0a14; color: #e0e0e0; font-family: monospace; padding: 20px; }
+        .pass { color: #22c55e; }
+        .fail { color: #ef4444; }
+        .info { color: #6366f1; }
+        pre { background: #111122; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>WASM Bridge Test</h1>
+    <div id="log"></div>
+
+    <script src="openmind.js"></script>
+    <script src="ui_connection.js"></script>
+    <script>
+    (function() {
+        const logEl = document.getElementById('log');
+        function log(msg, cls = '') {
+            const d = document.createElement('div');
+            d.className = cls;
+            d.textContent = msg;
+            logEl.appendChild(d);
+        }
+
+        async function runTests() {
+            const conn = new EngineConnection();
+
+            log('=== 1. Loading WASM Module ===', 'info');
+            const ok = await conn.load();
+            if (!ok) {
+                log('FAIL: WASM module failed to load', 'fail');
+                return;
+            }
+            log('PASS: WASM module loaded', 'pass');
+
+            log('\n=== 2. initWorld() ===', 'info');
+            const worldResult = conn.initWorld();
+            log(`Result: ${worldResult}`, 'pass');
+
+            log('\n=== 3. setBlock(5, 10, 15, STEEL) ===', 'info');
+            const setResult = conn.setBlock(5, 10, 15, 12);
+            log(`Result: ${setResult}`, 'pass');
+
+            log('\n=== 4. getBlockData(5, 10, 15) ===', 'info');
+            const block = conn.getBlock(5, 10, 15);
+            if (block && block.exists) {
+                log(`PASS: Block type = ${block.blockTypeName}`, 'pass');
+                log(`JSON: ${JSON.stringify(block, null, 2)}`, 'info');
+            } else {
+                log('FAIL: Block not found', 'fail');
+            }
+
+            log('\n=== 5. getWorldStats() ===', 'info');
+            const stats = conn.getWorldStats();
+            if (stats && stats.totalBlocks !== undefined) {
+                log(`PASS: totalBlocks = ${stats.totalBlocks}`, 'pass');
+                log(`JSON: ${JSON.stringify(stats, null, 2)}`, 'info');
+            } else {
+                log('FAIL: Stats not available', 'fail');
+            }
+
+            log('\n=== 6. tick(0.016) ===', 'info');
+            conn.tick(0.016);
+            log('PASS: tick() executed without errors', 'pass');
+
+            log('\n=== ALL TESTS COMPLETE ===', 'info');
+        }
+
+        runTests();
+    })();
+    </script>
+</body>
+</html>

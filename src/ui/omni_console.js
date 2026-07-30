@@ -1,3 +1,5 @@
+const DAY_LENGTH = (typeof OMUtils !== 'undefined') ? OMUtils.DAY_LENGTH : 36000;
+
 class OmniConsole {
     constructor() {
         this.engine = new EngineConnection();
@@ -20,6 +22,7 @@ class OmniConsole {
         this.shortcuts = new Shortcuts();
         this.tutorial = null;
         this.settingsPanel = new SettingsPanel();
+        this.worldEditor = null;
         this.selection = new Selection();
         this.copyPaste = new CopyPaste();
         this.blueprints = new BlueprintSystem();
@@ -28,13 +31,15 @@ class OmniConsole {
         this.importExport = new ImportExportBuilding();
         this.buildingHistory = new BuildingHistory();
         this.loadingScreen = null;
+        this.touchControls = null;
+        this._isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.activePanel = 'prompt';
         this.promptHistory = [];
         this.historyIndex = -1;
+        this.promptBridge = null;
         this.bookmarks = [];
         this.forgeHistory = [];
         this.currentEnv = 'earth';
-        this.selectedAgent = -1;
         this.lightMode = false;
         this.lastTickTime = 0;
         this.suggestions = [
@@ -50,6 +55,19 @@ class OmniConsole {
             'Set gravity to Moon levels'
         ];
         this.speedLabels = ['0.1x', '0.25x', '0.5x', '1x', '2x', '5x', '10x', '100x'];
+        this._exportProgressInterval = null;
+        this._simLoopTimeout = null;
+    }
+
+    destroy() {
+        this.stopSimulation();
+        if (this.agentInterval) { clearInterval(this.agentInterval); this.agentInterval = null; }
+        if (this._exportProgressInterval) { clearInterval(this._exportProgressInterval); this._exportProgressInterval = null; }
+        if (this._ecoGraphRaf) { cancelAnimationFrame(this._ecoGraphRaf); this._ecoGraphRaf = null; }
+        if (this.shortcuts) this.shortcuts.destroy();
+        if (this.liveStats) this.liveStats.stop();
+        if (this.worldIO) this.worldIO.stopAutoSave();
+        if (this.tutorial) this.tutorial.removeUI();
     }
 
     async init() {
@@ -73,6 +91,19 @@ class OmniConsole {
         this.shortcuts.init();
         this.shortcuts.register('undo', () => this.undoRedo.undo());
         this.shortcuts.register('redo', () => this.undoRedo.redo());
+        this.shortcuts.register('copy', () => {
+            if (this.selection && this.selection.blocks.size > 0) {
+                this.copyPaste.copy(this.selection);
+                this.addChatMessage('assistant', 'Copied ' + this.selection.blocks.size + ' blocks');
+            }
+        });
+        this.shortcuts.register('paste', () => {
+            if (this.copyPaste.hasClipboard()) {
+                this.copyPaste.paste(0, 2, 0, this.selection);
+                if (this.renderer) { this.renderer.dirty = true; this.renderer.rebuildMesh(); }
+                this.addChatMessage('assistant', 'Pasted clipboard');
+            }
+        });
         this.shortcuts.register('save', async () => {
             try { await this.worldIO.save('auto'); } catch (e) { this.addChatMessage('assistant', 'Save failed'); }
         });
@@ -82,6 +113,10 @@ class OmniConsole {
             const btn = document.getElementById('playPauseBtn');
             if (btn) btn.textContent = this.engine.paused ? '▶' : '⏸';
         });
+        if (this._isMobile && typeof TouchControls !== 'undefined') {
+            this.touchControls = new TouchControls();
+            console.log('[Mobile] TouchControls initialized');
+        }
         this.errorHandler.setNotificationFn((entry) => {
             if (this.notifications) this.notifications.error(entry.title + ': ' + entry.userMessage);
         });
@@ -104,6 +139,9 @@ class OmniConsole {
                 this.engine.setTimeOfDay(6);
                 this.renderer = new VoxelRenderer('viewport3d');
                 this.renderer.start(this.engine);
+                this.worldEditor = new WorldEditor(this.renderer, this.engine);
+                this.worldEditor.createGhostMesh();
+                this.renderer.setWorldEditor(this.worldEditor);
                 if (this.renderer.scene && this.renderer.camera) {
                     this.skybox = new OpenMindSkybox(this.renderer.scene);
                     this.water = new WaterRenderer(this.renderer.scene, this.renderer.camera);
@@ -113,7 +151,7 @@ class OmniConsole {
                         this.postProcessing.setup();
                     }
                 }
-                this.sound.init();
+                try { this.sound.init(); } catch (e) { this.log('Sound init failed: ' + e.message, 'warn'); }
                 this.notifications = new Notifications();
                 this.tutorial = new Tutorial();
                 this.tutorial.on((e) => {
@@ -121,6 +159,12 @@ class OmniConsole {
                 });
                 this.llm.engine = this.engine;
                 this.llm.renderer = this.renderer;
+                this.promptBridge = new PromptBridge(this.llm, this.engine, { console: this });
+                if (this.agentManager) {
+                    this.agentManager.setLLM(this.llm);
+                    this.agentManager.setEngine(this.engine);
+                    this.agentManager.setRenderer(this.renderer);
+                }
                 this.interactive.setEngine(this.engine);
                 this.interactive.setRenderer(this.renderer);
                 this.inventory.setEngine(this.engine);
@@ -142,15 +186,29 @@ class OmniConsole {
                 this.worldIO.setEngine(this.engine);
                 this.worldIO.setRenderer(this.renderer);
                 this.worldIO.startAutoSave(30000);
-                this.liveStats = new LiveStats();
-                this.liveStats.setEngine(this.engine);
-                this.liveStats.setRenderer(this.renderer);
-                this.liveStats.start(1000);
+                if (typeof LiveStats !== 'undefined') {
+                    this.liveStats = new LiveStats();
+                    this.liveStats.setEngine(this.engine);
+                    this.liveStats.setRenderer(this.renderer);
+                    this.liveStats.start(1000);
+                }
+                this._applyMobileThrottles();
+                if (this.touchControls) {
+                    this.touchControls.init(this.engine, this.renderer);
+                    this.touchControls.enable();
+                    this.touchControls.onBlockPlace = () => {
+                        if (this.worldEditor) this.worldEditor.placeBlock();
+                    };
+                    this.touchControls.onBlockBreak = () => {
+                        if (this.worldEditor) this.worldEditor.breakBlock();
+                    };
+                    console.log('[Mobile] TouchControls activated');
+                }
                 this.startSimulation();
             }
             this.updateConnectionStatus(ok);
         } catch (e) {
-            console.error('[loadWASM] Initialization error:', e);
+            this.log('[loadWASM] Initialization error: ' + e.message, 'err');
             this.updateConnectionStatus(false);
         } finally {
             if (overlay) overlay.classList.remove('visible');
@@ -168,6 +226,19 @@ class OmniConsole {
         if (text) { text.textContent = connected ? 'Connected' : 'Offline'; }
     }
 
+    _applyMobileThrottles() {
+        if (!this._isMobile) return;
+        console.log('[Mobile] Applying performance throttles');
+        if (this.renderer) {
+            this.renderer.drawDistance = 8;
+        }
+        if (this.particles) {
+            this.particles.enabled = true;
+        }
+        this._mobileSimTickRate = 500;
+        this._mobileUseIdleCallback = true;
+    }
+
     startSimulation() {
         if (this.engine.simRunning) return;
         this.engine.simRunning = true;
@@ -177,28 +248,47 @@ class OmniConsole {
         this.simLoop();
     }
 
+    stopSimulation() {
+        this.engine.simRunning = false;
+        if (this._simLoopTimeout) { clearTimeout(this._simLoopTimeout); this._simLoopTimeout = null; }
+    }
+
     simLoop() {
         if (!this.engine.simRunning) return;
         if (!this.engine.paused) {
             const now = performance.now();
-            if (now - this.lastTickTime >= 500) {
+            const tickRate = this._mobileSimTickRate || 500;
+            if (now - this.lastTickTime >= tickRate) {
                 const dt = 1/60;
                 try {
                     this.engine.tick(dt);
+                    if (this.renderer) this.renderer.dirty = true;
                     this.interactive.tick(dt);
                     this.particles.update(dt);
                     if (this.physicsVisuals) this.physicsVisuals.update(dt);
-                    if (this.skybox) {
-                        const tod = this.engine.getTimeOfDay();
-                        const w = this.engine.getWeather();
-                        const wn = this.engine.weatherNames[w.type] || 'clear';
-                        this.skybox.update(dt, tod, wn);
-                    }
-                    if (this.water) {
-                        const tod = this.engine.getTimeOfDay();
-                        const w = this.engine.getWeather();
-                        const wn = this.engine.weatherNames[w.type] || 'clear';
-                        this.water.update(dt, tod, wn);
+                    const doBackground = this._mobileUseIdleCallback
+                        ? (typeof requestIdleCallback !== 'undefined')
+                        : true;
+                    const updateSkyWater = () => {
+                        this._skyUpdateCount = (this._skyUpdateCount || 0) + 1;
+                        if (this.skybox && this._skyUpdateCount % 4 === 0) {
+                            const tod = this.engine.getTimeOfDay();
+                            const w = this.engine.getWeather();
+                            const wn = this.engine.weatherNames[w.type] || 'clear';
+                            this.skybox.update(dt, tod, wn);
+                        }
+                        this._waterUpdateCount = (this._waterUpdateCount || 0) + 1;
+                        if (this.water && this._waterUpdateCount % 2 === 0) {
+                            const tod = this.engine.getTimeOfDay();
+                            const w = this.engine.getWeather();
+                            const wn = this.engine.weatherNames[w.type] || 'clear';
+                            this.water.update(dt, tod, wn);
+                        }
+                    };
+                    if (doBackground) {
+                        requestIdleCallback(updateSkyWater, { timeout: 300 });
+                    } else {
+                        updateSkyWater();
                     }
                 } catch (e) {
                     this.log('Tick error: ' + e.message, 'err');
@@ -206,27 +296,36 @@ class OmniConsole {
                 this.lastTickTime = now;
             }
         }
-        setTimeout(() => this.simLoop(), 200);
+        this._simLoopTimeout = setTimeout(() => this.simLoop(), this._mobileUseIdleCallback ? 300 : 200);
     }
 
     updateStats() {
-        const el = (id) => document.getElementById(id);
-        if (!el('statBlocks')) return;
+        const statBlocks = document.getElementById('statBlocks');
+        if (!statBlocks) return;
         const s = this.engine.getWorldStats();
-        el('statBlocks').textContent = s.totalBlocks || 0;
-        el('statTick').textContent = s.currentTick || 0;
-        el('statTemp').textContent = (s.averageTemperature || 293.15).toFixed(1) + ' K';
-        el('statFPS').textContent = this.engine.fps;
+        statBlocks.textContent = s.totalBlocks || 0;
+        const statTick = document.getElementById('statTick');
+        if (statTick) statTick.textContent = s.currentTick || 0;
+        const statTemp = document.getElementById('statTemp');
+        if (statTemp) statTemp.textContent = (s.averageTemperature || 293.15).toFixed(1) + ' K';
+        const statFPS = document.getElementById('statFPS');
+        if (statFPS) statFPS.textContent = this.engine.fps;
         const tod = this.engine.getTimeOfDay();
-        el('statTimeOfDay').textContent = this.formatTime(tod);
+        const statTimeOfDay = document.getElementById('statTimeOfDay');
+        if (statTimeOfDay) statTimeOfDay.textContent = this.formatTime(tod);
         const w = this.engine.getWeather();
-        el('statWeather').textContent = this.engine.weatherNames[w.type] || 'CLEAR';
-        el('statEntities').textContent = this.engine.getAgentCount();
-        el('timeDisplay').textContent = this.formatTimeFull(tod);
-        el('tickCount').textContent = 'Tick ' + (s.currentTick || 0);
+        const statWeather = document.getElementById('statWeather');
+        if (statWeather) statWeather.textContent = this.engine.weatherNames[w.type] || 'CLEAR';
+        const statEntities = document.getElementById('statEntities');
+        if (statEntities) statEntities.textContent = this.engine.getAgentCount();
+        const timeDisplay = document.getElementById('timeDisplay');
+        if (timeDisplay) timeDisplay.textContent = this.formatTimeFull(tod);
+        const tickCount = document.getElementById('tickCount');
+        if (tickCount) tickCount.textContent = 'Tick ' + (s.currentTick || 0);
         const ticks = s.currentTick || 0;
-        const dayLength = 10 * 3600;
-        el('dayCount').textContent = 'Day ' + (Math.floor(ticks / dayLength) + 1);
+        const dayLength = DAY_LENGTH;
+        const dayCount = document.getElementById('dayCount');
+        if (dayCount) dayCount.textContent = 'Day ' + (Math.floor(ticks / dayLength) + 1);
     }
 
     formatTime(h) {
@@ -283,6 +382,7 @@ class OmniConsole {
 
     sendPrompt() {
         const input = document.getElementById('promptInput');
+        if (!input) return;
         const text = input.value.trim();
         if (!text) return;
         this.promptHistory.unshift(text);
@@ -367,22 +467,47 @@ class OmniConsole {
         } else {
             this.addChatMessage('assistant', 'Generating: "' + text + '"...');
             if (this.engine.wasmReady) {
+                const inputKey = document.getElementById('llmApiKey')?.value?.trim() || '';
+                if (inputKey && inputKey.length > 5 && !this.llm.apiKey) {
+                    const provider = document.getElementById('llmProvider')?.value || 'groq';
+                    const endpoint = document.getElementById('cloudEndpoint')?.value || '';
+                    const model = provider === 'custom' ? document.getElementById('cloudCustomModel')?.value : document.getElementById('llmModel')?.value;
+                    this.llm.setConfig(provider, inputKey, endpoint || '', model || '');
+                }
                 if (this.llm.apiKey) {
+                    if (this.promptBridge) {
+                        const bridgeResult = await this.promptBridge.process(text);
+                        if (bridgeResult.success && bridgeResult.results && bridgeResult.results.some(r => r.success)) {
+                            this.renderer.dirty = true;
+                            this.renderer.rebuildMesh();
+                            this.updateStats();
+                            this.addChatMessage('assistant', bridgeResult.summary);
+                            return;
+                        }
+                    }
+                    this.llm.onToolCall = (name, args) => {
+                        this.addChatMessage('assistant', `Tool: ${name}(${JSON.stringify(args).substring(0, 120)}...)`);
+                    };
                     const result = await this.llm.generate(text);
+                    this.llm.onToolCall = null;
                     if (result.success) {
-                        const placed = await this.llm.executeBlocks(result.blocks);
-                        this.engine.tick(0.1);
-                        this.addChatMessage('assistant', 'Generated ' + placed + ' blocks via ' + this.llm.provider + '.');
+                        if (result.blocks && result.blocks.length > 0) {
+                            const placed = await this.llm.executeBlocks(result.blocks);
+                            this.engine.tick(0.1);
+                            this.addChatMessage('assistant', 'Generated ' + placed + ' blocks via ' + this.llm.provider + '.');
+                        } else if (result.totalBlocksPlaced > 0) {
+                            this.engine.tick(0.1);
+                            const tools = result.toolsUsed?.length ? ` Used: ${result.toolsUsed.join(', ')}.` : '';
+                            this.addChatMessage('assistant', `Built ${result.totalBlocksPlaced} blocks in ${result.iterations} steps.${tools}\n${result.text || ''}`);
+                        } else {
+                            this.addChatMessage('assistant', result.text || 'No blocks were placed.');
+                        }
                         this.updateStats();
                     } else {
-                        this.addChatMessage('assistant', 'LLM error: ' + result.error);
+                        this.addChatMessage('assistant', 'Error: ' + result.error);
                     }
                 } else {
-                    const result = this.engine.generateFromPrompt(text);
-                    this.engine.tick(0.1);
-                    const stats = this.engine.getWorldStats();
-                    this.addChatMessage('assistant', 'Generated ' + (stats.totalBlocks || 0) + ' blocks (local mode). Add API key in Brain panel for AI generation.');
-                    this.updateStats();
+                    this.addChatMessage('assistant', 'No API key. Add your key in the Brain panel and click Test Connection.');
                 }
             } else {
                 this.addChatMessage('assistant', 'WASM engine not connected.');
@@ -392,42 +517,54 @@ class OmniConsole {
 
     async saveWorld(name) {
         if (!this.engine.wasmReady) { this.addChatMessage('assistant', 'WASM not connected.'); return; }
-        const result = await this.worldIO.save(name);
-        if (result.success) {
-            this.addChatMessage('assistant', 'World saved as "' + name + '" (' + result.blocks + ' blocks).');
-        } else {
-            this.addChatMessage('assistant', 'Save failed: ' + result.error);
-        }
+        try {
+            const result = await this.worldIO.save(name);
+            if (result.success) {
+                this.addChatMessage('assistant', 'World saved as "' + name + '" (' + result.blocks + ' blocks).');
+            } else {
+                this.addChatMessage('assistant', 'Save failed: ' + result.error);
+            }
+        } catch (e) { this.addChatMessage('assistant', 'Save error: ' + e.message); }
     }
 
     async loadWorld(name) {
-        const result = await this.worldIO.load(name);
-        if (result.success) {
-            this.addChatMessage('assistant', 'Loaded "' + name + '" (' + result.blocks + ' blocks).');
-        } else {
-            this.addChatMessage('assistant', 'Load failed: ' + result.error);
-        }
+        try {
+            const result = await this.worldIO.load(name);
+            if (result.success) {
+                this.addChatMessage('assistant', 'Loaded "' + name + '" (' + result.blocks + ' blocks).');
+                if (this.renderer) { this.renderer.updateFromWASM(); this.renderer.rebuildMesh(); }
+            } else {
+                this.addChatMessage('assistant', 'Load failed: ' + result.error);
+            }
+        } catch (e) { this.addChatMessage('assistant', 'Load error: ' + e.message); }
     }
 
     async listWorlds() {
-        const worlds = await this.worldIO.list();
-        if (worlds.length === 0) { this.addChatMessage('assistant', 'No saved worlds.'); return; }
-        const list = worlds.map(w => w.name + ' (' + w.blockCount + ' blocks, ' + new Date(w.savedAt).toLocaleDateString() + ')').join('\n');
-        this.addChatMessage('assistant', 'Saved worlds:\n' + list);
+        try {
+            const worlds = await this.worldIO.list();
+            if (worlds.length === 0) { this.addChatMessage('assistant', 'No saved worlds.'); return; }
+            const list = worlds.map(w => w.name + ' (' + w.blockCount + ' blocks, ' + new Date(w.savedAt).toLocaleDateString() + ')').join('\n');
+            this.addChatMessage('assistant', 'Saved worlds:\n' + list);
+        } catch (e) { this.addChatMessage('assistant', 'List error: ' + e.message); }
     }
 
     newWorld() {
-        this.worldIO.newWorld();
-        this.addChatMessage('assistant', 'New empty world created.');
+        try {
+            this.worldIO.newWorld();
+            if (this.renderer) { this.renderer.updateFromWASM(); this.renderer.rebuildMesh(); }
+            this.addChatMessage('assistant', 'New empty world created.');
+        } catch (e) { this.addChatMessage('assistant', 'New world error: ' + e.message); }
     }
 
     async deleteWorld(name) {
-        const result = await this.worldIO.remove(name);
-        if (result.success) {
-            this.addChatMessage('assistant', 'Deleted "' + name + '".');
-        } else {
-            this.addChatMessage('assistant', 'Delete failed.');
-        }
+        try {
+            const result = await this.worldIO.remove(name);
+            if (result.success) {
+                this.addChatMessage('assistant', 'Deleted "' + name + '".');
+            } else {
+                this.addChatMessage('assistant', 'Delete failed.');
+            }
+        } catch (e) { this.addChatMessage('assistant', 'Delete error: ' + e.message); }
     }
 
     addChatMessage(role, text) {
@@ -446,19 +583,32 @@ class OmniConsole {
         div.appendChild(bubble);
         chat.appendChild(div);
         chat.scrollTop = chat.scrollHeight;
+        while (chat.children.length > 200) chat.removeChild(chat.firstChild);
     }
 
-    escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    _escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        if (typeof OMUtils !== 'undefined') return OMUtils.escapeHtml(str);
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    _safeHexColor(str, fallback) {
+        if (typeof OMUtils !== 'undefined') return OMUtils.safeHexColor(str, fallback);
+        return (typeof str === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(str)) ? str : (fallback || '#ffffff');
+    }
 
     navigateHistory(dir) {
         if (this.promptHistory.length === 0) return;
         this.historyIndex = Math.max(-1, Math.min(this.historyIndex + dir, this.promptHistory.length - 1));
         const input = document.getElementById('promptInput');
-        input.value = this.historyIndex >= 0 ? this.promptHistory[this.historyIndex] : '';
+        if (input) input.value = this.historyIndex >= 0 ? this.promptHistory[this.historyIndex] : '';
     }
 
     autocomplete() {
         const input = document.getElementById('promptInput');
+        if (!input) return;
         const val = input.value.toLowerCase();
         const match = this.suggestions.find(s => s.toLowerCase().startsWith(val) && s.toLowerCase() !== val);
         if (match) input.value = match;
@@ -473,7 +623,8 @@ class OmniConsole {
             chip.className = 'suggestion-chip';
             chip.textContent = s;
             chip.addEventListener('click', () => {
-                document.getElementById('promptInput').value = s;
+                const inp = document.getElementById('promptInput');
+                if (inp) inp.value = s;
                 this.sendPrompt();
             });
             container.appendChild(chip);
@@ -483,7 +634,7 @@ class OmniConsole {
     showHistoryDropdown() {
         if (this.promptHistory.length === 0) return;
         const input = document.getElementById('promptInput');
-        input.value = this.promptHistory[0];
+        if (input) input.value = this.promptHistory[0];
     }
 
     /* ====== TIME CONTROLS ====== */
@@ -549,14 +700,19 @@ class OmniConsole {
             if (el) el.addEventListener('change', e => {
                 this.engine.setOverlay(type, e.target.checked);
                 const legend = document.getElementById('overlayLegend');
-                if (e.target.checked) {
-                    legend.style.display = '';
-                    const l = legendLabels[type] || legendLabels.stress;
-                    document.getElementById('legendBar').style.background = l.gradient;
-                    document.getElementById('legendMin').textContent = l.min;
-                    document.getElementById('legendMax').textContent = l.max;
-                } else {
-                    legend.style.display = 'none';
+                if (legend) {
+                    if (e.target.checked) {
+                        legend.style.display = '';
+                        const l = legendLabels[type] || legendLabels.stress;
+                        const bar = document.getElementById('legendBar');
+                        const minEl = document.getElementById('legendMin');
+                        const maxEl = document.getElementById('legendMax');
+                        if (bar) bar.style.background = l.gradient;
+                        if (minEl) minEl.textContent = l.min;
+                        if (maxEl) maxEl.textContent = l.max;
+                    } else {
+                        legend.style.display = 'none';
+                    }
                 }
             });
         };
@@ -575,6 +731,8 @@ class OmniConsole {
 
         const ecoGraphClose = document.getElementById('ecoGraphClose');
         if (ecoGraphClose) ecoGraphClose.addEventListener('click', () => {
+            if (this._ecoGraphRaf) cancelAnimationFrame(this._ecoGraphRaf);
+            this._ecoGraphRunning = false;
             const g = document.getElementById('ecoGraphOverlay');
             if (g) g.style.display = 'none';
             const overlay = document.getElementById('overlayEcosystem');
@@ -583,11 +741,15 @@ class OmniConsole {
     }
 
     startEcoGraph() {
+        if (this._ecoGraphRaf) cancelAnimationFrame(this._ecoGraphRaf);
+        this._ecoGraphRunning = true;
         const canvas = document.getElementById('ecoGraphCanvas');
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
         const data = { predators: [], prey: [] };
         const draw = () => {
-            if (document.getElementById('ecoGraphOverlay').style.display === 'none') return;
+            const ecoOverlay = document.getElementById('ecoGraphOverlay');
+            if (!this._ecoGraphRunning || !ecoOverlay || ecoOverlay.style.display === 'none') return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             let predCount = 0, preyCount = 0;
             if (this.engine.wasmReady) {
@@ -612,89 +774,175 @@ class OmniConsole {
             ctx.fillText('Predators: ' + predCount, 16, 12);
             ctx.fillStyle = '#4ade80'; ctx.fillRect(4, 16, 8, 8);
             ctx.fillStyle = '#94a3b8'; ctx.fillText('Prey: ' + preyCount, 16, 24);
-            requestAnimationFrame(draw);
+            this._ecoGraphRaf = requestAnimationFrame(draw);
         };
         draw();
     }
 
     /* ====== AGENT DASHBOARD ====== */
     bindAgents() {
-        this.refreshAgents();
+        this.agentManager = new AgentManager();
+        this.selectedAgentId = null;
+
+        this.agentManager.onAgentMessage = (agentId, msg) => {
+            this.addChatMessage('assistant', `[${agentId}] ${msg}`);
+        };
+        this.agentManager.onAgentUpdate = () => this.refreshAgents();
+
+        this.agentManager.init().then(() => {
+            if (this.llm) this.agentManager.setLLM(this.llm);
+            if (this.engine) this.agentManager.setEngine(this.engine);
+            if (this.renderer) this.agentManager.setRenderer(this.renderer);
+            this.refreshAgents();
+        });
+
+        const spawnBtn = document.getElementById('agentSpawnBtn');
+        if (spawnBtn) spawnBtn.addEventListener('click', () => {
+            const form = document.getElementById('agentSpawnForm');
+            if (form) form.classList.toggle('hidden');
+        });
+
+        const spawnCancel = document.getElementById('agentSpawnCancel');
+        if (spawnCancel) spawnCancel.addEventListener('click', () => {
+            const form = document.getElementById('agentSpawnForm');
+            if (form) form.classList.add('hidden');
+        });
+
+        const agentCfgGoal = document.getElementById('agentCfgGoal');
+        if (agentCfgGoal) agentCfgGoal.addEventListener('change', (e) => {
+            const row = document.getElementById('agentCustomGoalRow');
+            if (row) { if (e.target.value === 'custom') row.classList.remove('hidden'); else row.classList.add('hidden'); }
+        });
+
+        const spawnConfirm = document.getElementById('agentSpawnConfirm');
+        if (spawnConfirm) spawnConfirm.addEventListener('click', () => {
+            const cfg = new AgentConfig();
+            cfg.apply({
+                name: document.getElementById('agentCfgName')?.value || 'Agent',
+                role: document.getElementById('agentCfgRole')?.value || 'builder',
+                personality: document.getElementById('agentCfgPersonality')?.value || 'helpful',
+                goalPreset: document.getElementById('agentCfgGoal')?.value || 'custom',
+                customGoal: document.getElementById('agentCfgCustomGoal')?.value || ''
+            });
+            const agent = this.agentManager.spawn(cfg);
+            this.agentManager.startAgent(agent.id);
+            this.addChatMessage('assistant', `Spawned agent "${agent.name}" (${agent.role}) with goal: ${agent.currentGoal?.description || 'none'}`);
+            this.refreshAgents();
+            const form = document.getElementById('agentSpawnForm');
+            if (form) form.classList.add('hidden');
+        });
+
         const agentCloseBtn = document.getElementById('agentCloseBtn');
         if (agentCloseBtn) agentCloseBtn.addEventListener('click', () => {
             const inspector = document.getElementById('agentInspector');
-            if (inspector) inspector.style.display = 'none';
-            this.selectedAgent = -1;
+            if (inspector) inspector.classList.add('hidden');
+            this.selectedAgentId = null;
             document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
         });
+
+        const agentStartBtn = document.getElementById('agentStartBtn');
+        if (agentStartBtn) agentStartBtn.addEventListener('click', () => {
+            if (this.selectedAgentId) {
+                this.agentManager.startAgent(this.selectedAgentId);
+                this.addChatMessage('assistant', `Started agent ${this.selectedAgentId}`);
+                this.refreshAgents();
+            }
+        });
+
+        const agentStopBtn = document.getElementById('agentStopBtn');
+        if (agentStopBtn) agentStopBtn.addEventListener('click', () => {
+            if (this.selectedAgentId) {
+                this.agentManager.stopAgent(this.selectedAgentId);
+                this.addChatMessage('assistant', `Stopped agent ${this.selectedAgentId}`);
+                this.refreshAgents();
+            }
+        });
+
+        const agentDeleteBtn = document.getElementById('agentDeleteBtn');
+        if (agentDeleteBtn) agentDeleteBtn.addEventListener('click', async () => {
+            if (this.selectedAgentId) {
+                await this.agentManager.delete(this.selectedAgentId);
+                this.addChatMessage('assistant', `Deleted agent ${this.selectedAgentId}`);
+                this.selectedAgentId = null;
+                const inspector = document.getElementById('agentInspector');
+                if (inspector) inspector.classList.add('hidden');
+                this.refreshAgents();
+            }
+        });
+
+        const stopAllBtn = document.getElementById('agentStopAllBtn');
+        if (stopAllBtn) stopAllBtn.addEventListener('click', () => {
+            this.agentManager.stopAll();
+            this.addChatMessage('assistant', 'Stopped all agents.');
+            this.refreshAgents();
+        });
+
         if (this.agentInterval) clearInterval(this.agentInterval);
-        this.agentInterval = setInterval(() => this.refreshAgents(), 5000);
+        this.agentInterval = setInterval(() => this.refreshAgents(), 3000);
     }
 
     refreshAgents() {
         const list = document.getElementById('agentList');
-        const count = this.engine.getAgentCount();
-        if (count === 0) { list.innerHTML = '<div class="agent-empty">No agents in world</div>'; return; }
+        if (!list) return;
+        const agents = this.agentManager ? this.agentManager.getAll() : [];
+        if (agents.length === 0) {
+            list.innerHTML = '<div class="agent-empty">No agents. Click + Spawn to create one.</div>';
+            return;
+        }
         list.innerHTML = '';
-        for (let i = 0; i < count; i++) {
-            const a = this.engine.getAgentData(i);
-            if (!a || !a.exists) continue;
-            const role = a.isPredator ? 'predator' : (a.isDiseased ? 'diseased' : 'prey');
+        for (const a of agents) {
+            const stateColors = { idle: '#94a3b8', thinking: '#facc15', acting: '#22c55e', error: '#ef4444' };
+            const stateColor = stateColors[a.state] || '#94a3b8';
             const card = document.createElement('div');
-            card.className = 'agent-card' + (this.selectedAgent === i ? ' selected' : '');
-            card.innerHTML = `<div class="agent-avatar-sm">${String.fromCharCode(65 + (a.id || i) % 26)}</div><div class="agent-info"><div class="agent-card-name">Agent #${a.id !== undefined ? a.id : i}</div><div class="agent-card-role">${role}</div></div><div class="agent-card-hp">HP:${Math.round(a.health || 0)}</div>`;
-            card.addEventListener('click', () => this.inspectAgent(i));
+            card.className = 'agent-card' + (this.selectedAgentId === a.id ? ' selected' : '');
+            card.innerHTML = `<div class="agent-avatar-sm" style="background:${stateColor}20;color:${stateColor}">${(a.name||'?')[0].toUpperCase()}</div><div class="agent-info"><div class="agent-card-name">${this._escapeHtml(a.name)}</div><div class="agent-card-role">${this._escapeHtml(a.role)} · <span style="color:${stateColor}">${a.state}</span></div></div>`;
+            card.addEventListener('click', () => this.inspectAgent(a.id));
             list.appendChild(card);
         }
     }
 
-    inspectAgent(idx) {
-        this.selectedAgent = idx;
-        const a = this.engine.getAgentData(idx);
-        if (!a || !a.exists) return;
-        document.getElementById('agentInspector').style.display = '';
-        const name = 'Agent #' + (a.id !== undefined ? a.id : idx);
-        const role = a.isPredator ? 'predator' : (a.isDiseased ? 'diseased' : 'prey');
-        document.getElementById('agentAvatar').textContent = name[0].toUpperCase();
-        document.getElementById('agentName').textContent = name;
-        document.getElementById('agentRole').textContent = role + (a.isAlive ? '' : ' (dead)');
-        document.getElementById('agentHealth').style.width = (a.health || 0) + '%';
-        document.getElementById('agentHealthVal').textContent = Math.round(a.health || 0);
-        document.getElementById('agentHunger').style.width = '0%';
-        document.getElementById('agentHungerVal').textContent = 'N/A';
-        document.getElementById('agentEnergy').style.width = (a.energy || 0) + '%';
-        document.getElementById('agentEnergyVal').textContent = Math.round(a.energy || 0);
-        document.getElementById('agentPosition').textContent = Math.round(a.x||0) + ', ' + Math.round(a.y||0) + ', ' + Math.round(a.z||0);
-        document.getElementById('agentGoal').textContent = a.isAlive ? (a.isPredator ? 'Hunt prey' : 'Find food') : 'Dead';
+    inspectAgent(agentId) {
+        const agent = this.agentManager?.get(agentId);
+        if (!agent) return;
+        this.selectedAgentId = agentId;
+        document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
+        const inspector = document.getElementById('agentInspector');
+        if (inspector) inspector.classList.remove('hidden');
 
-        const memDiv = document.getElementById('agentMemories');
-        memDiv.innerHTML = '';
-        const mems = ['Position: ' + Math.round(a.x||0) + ',' + Math.round(a.y||0) + ',' + Math.round(a.z||0)];
-        if (a.vx || a.vz) mems.push('Velocity: ' + (a.vx||0).toFixed(1) + ',' + (a.vy||0).toFixed(1) + ',' + (a.vz||0).toFixed(1));
-        if (a.isDiseased) mems.push('Status: Diseased');
-        if (!a.isAlive) mems.push('Status: Dead');
-        mems.forEach(m => { const d = document.createElement('div'); d.className = 'memory-entry'; d.textContent = m; memDiv.appendChild(d); });
+        const agentAvatar = document.getElementById('agentAvatar');
+        if (agentAvatar) agentAvatar.textContent = (agent.name || '?')[0].toUpperCase();
+        const agentName = document.getElementById('agentName');
+        if (agentName) agentName.textContent = agent.name;
+        const agentRole = document.getElementById('agentRole');
+        if (agentRole) agentRole.textContent = agent.role + ' · ' + agent.personality;
+        const agentHealth = document.getElementById('agentHealth');
+        if (agentHealth) agentHealth.style.width = (agent.health || 0) + '%';
+        const agentHealthVal = document.getElementById('agentHealthVal');
+        if (agentHealthVal) agentHealthVal.textContent = Math.round(agent.health || 0);
+        const agentEnergy = document.getElementById('agentEnergy');
+        if (agentEnergy) agentEnergy.style.width = (agent.energy || 0) + '%';
+        const agentEnergyVal = document.getElementById('agentEnergyVal');
+        if (agentEnergyVal) agentEnergyVal.textContent = Math.round(agent.energy || 0);
+        const agentPosition = document.getElementById('agentPosition');
+        if (agentPosition) agentPosition.textContent = `${Math.round(agent.x)}, ${Math.round(agent.y)}, ${Math.round(agent.z)}`;
+        const agentState = document.getElementById('agentState');
+        if (agentState) agentState.textContent = agent.state;
 
-        document.getElementById('agentThoughts').textContent = a.isAlive ? (a.isPredator ? 'Looking for prey nearby...' : 'Scanning for food and safety.') : 'No longer active.';
+        const goalDiv = document.getElementById('agentGoal');
+        if (goalDiv) goalDiv.textContent = agent.currentGoal?.description || 'None';
 
-        const relDiv = document.getElementById('agentRelationships');
-        relDiv.innerHTML = '';
-        const relType = a.isPredator ? 'enemy' : 'friend';
-        const chip = document.createElement('span');
-        chip.className = 'rel-chip ' + relType;
-        chip.textContent = (a.isPredator ? 'Prey' : 'Allies') + ' (' + relType + ')';
-        relDiv.appendChild(chip);
-
-        const invDiv = document.getElementById('agentInventory');
-        invDiv.innerHTML = '';
-        const invChip = document.createElement('span');
-        invChip.className = 'inv-chip';
-        invChip.textContent = a.isPredator ? 'Claws' : 'Food stores';
-        invDiv.appendChild(invChip);
-
-        document.querySelectorAll('.agent-card').forEach((c, i) => {
-            c.classList.toggle('selected', i === idx);
-        });
+        const thoughtsDiv = document.getElementById('agentThoughts');
+        if (thoughtsDiv) {
+            thoughtsDiv.innerHTML = '';
+            const recent = agent.memories.slice(-15).reverse();
+            for (const m of recent) {
+                const d = document.createElement('div');
+                d.style.cssText = 'padding:3px 0;font-size:10px;border-bottom:1px solid var(--border);color:var(--text2)';
+                const typeColors = { action: '#22c55e', thought: '#6366f1', error: '#ef4444', complete: '#4ade80', warning: '#facc15', info: '#94a3b8' };
+                d.innerHTML = `<span style="color:${typeColors[m.type] || '#94a3b8'}">[${m.type}]</span> ${this._escapeHtml((m.text || '').substring(0, 150))}`;
+                thoughtsDiv.appendChild(d);
+            }
+        }
     }
 
     /* ====== ENVIRONMENT PRESETS ====== */
@@ -705,17 +953,27 @@ class OmniConsole {
                 card.classList.add('active');
                 this.currentEnv = card.dataset.preset;
                 const p = this.engine.envPresets[this.currentEnv];
-                document.getElementById('envCustomSliders').style.display = this.currentEnv === 'custom' ? '' : 'none';
-                document.getElementById('envInfoGravity').textContent = p.gravity + ' m/s²';
-                document.getElementById('envInfoAir').textContent = p.airDensity + ' kg/m³';
-                document.getElementById('envInfoTemp').textContent = p.temperature + ' K';
+                const envCustomSliders = document.getElementById('envCustomSliders');
+                if (envCustomSliders) envCustomSliders.style.display = this.currentEnv === 'custom' ? '' : 'none';
+                const envInfoGravity = document.getElementById('envInfoGravity');
+                if (envInfoGravity) envInfoGravity.textContent = p.gravity + ' m/s²';
+                const envInfoAir = document.getElementById('envInfoAir');
+                if (envInfoAir) envInfoAir.textContent = p.airDensity + ' kg/m³';
+                const envInfoTemp = document.getElementById('envInfoTemp');
+                if (envInfoTemp) envInfoTemp.textContent = p.temperature + ' K';
                 if (this.currentEnv === 'custom') {
-                    document.getElementById('envGravity').value = p.gravity;
-                    document.getElementById('envGravityVal').textContent = p.gravity;
-                    document.getElementById('envAirDensity').value = p.airDensity;
-                    document.getElementById('envAirDensityVal').textContent = p.airDensity;
-                    document.getElementById('envTemp').value = p.temperature;
-                    document.getElementById('envTempVal').textContent = p.temperature.toFixed(1);
+                    const envGravity = document.getElementById('envGravity');
+                    if (envGravity) envGravity.value = p.gravity;
+                    const envGravityVal = document.getElementById('envGravityVal');
+                    if (envGravityVal) envGravityVal.textContent = p.gravity;
+                    const envAirDensity = document.getElementById('envAirDensity');
+                    if (envAirDensity) envAirDensity.value = p.airDensity;
+                    const envAirDensityVal = document.getElementById('envAirDensityVal');
+                    if (envAirDensityVal) envAirDensityVal.textContent = p.airDensity;
+                    const envTemp = document.getElementById('envTemp');
+                    if (envTemp) envTemp.value = p.temperature;
+                    const envTempVal = document.getElementById('envTempVal');
+                    if (envTempVal) envTempVal.textContent = p.temperature.toFixed(1);
                 }
             });
         });
@@ -752,10 +1010,13 @@ class OmniConsole {
     }
 
     async generateMaterial() {
-        const input = document.getElementById('forgeInput').value.trim();
+        const forgeInput = document.getElementById('forgeInput');
+        const input = forgeInput ? forgeInput.value.trim() : '';
         if (!input) return;
-        document.getElementById('forgeLoading').style.display = '';
-        document.getElementById('forgeResult').style.display = 'none';
+        const forgeLoading = document.getElementById('forgeLoading');
+        const forgeResult = document.getElementById('forgeResult');
+        if (forgeLoading) forgeLoading.style.display = '';
+        if (forgeResult) forgeResult.style.display = 'none';
         this.addChatMessage('assistant', 'Generating material: ' + input.substring(0, 50) + '...');
 
         if (this.llm.apiKey) {
@@ -815,18 +1076,23 @@ class OmniConsole {
     }
 
     showMaterialResult(mat) {
-        document.getElementById('forgeLoading').style.display = 'none';
-        document.getElementById('forgeResult').style.display = '';
-        document.getElementById('materialSwatch').style.background = mat.color;
-        document.getElementById('materialProps').innerHTML = `
-            <div class="material-prop"><span>Name</span><span>${mat.name}</span></div>
-            <div class="material-prop"><span>Mass</span><span>${mat.mass} kg</span></div>
-            <div class="material-prop"><span>Hardness</span><span>${mat.hardness}</span></div>
-            <div class="material-prop"><span>Melting Pt</span><span>${mat.meltingPoint} K</span></div>
-            <div class="material-prop"><span>Density</span><span>${mat.density} kg/m³</span></div>
-            <div class="material-prop"><span>Tensile</span><span>${mat.tensileStrength} MPa</span></div>
+        const forgeLoading = document.getElementById('forgeLoading');
+        const forgeResult = document.getElementById('forgeResult');
+        const materialSwatch = document.getElementById('materialSwatch');
+        const materialProps = document.getElementById('materialProps');
+        const forgeAddBtn = document.getElementById('forgeAddBtn');
+        if (forgeLoading) forgeLoading.style.display = 'none';
+        if (forgeResult) forgeResult.style.display = '';
+        if (materialSwatch) materialSwatch.style.background = this._safeHexColor(mat.color, '#888888');
+        if (materialProps) materialProps.innerHTML = `
+            <div class="material-prop"><span>Name</span><span>${this._escapeHtml(mat.name)}</span></div>
+            <div class="material-prop"><span>Mass</span><span>${this._escapeHtml(mat.mass)} kg</span></div>
+            <div class="material-prop"><span>Hardness</span><span>${this._escapeHtml(String(mat.hardness))}</span></div>
+            <div class="material-prop"><span>Melting Pt</span><span>${this._escapeHtml(String(mat.meltingPoint))} K</span></div>
+            <div class="material-prop"><span>Density</span><span>${this._escapeHtml(String(mat.density))} kg/m³</span></div>
+            <div class="material-prop"><span>Tensile</span><span>${this._escapeHtml(String(mat.tensileStrength))} MPa</span></div>
         `;
-        document.getElementById('forgeAddBtn').onclick = () => {
+        if (forgeAddBtn) forgeAddBtn.onclick = () => {
             if (!this.engine.wasmReady) { this.addChatMessage('assistant', 'WASM not connected.'); return; }
             const props = JSON.stringify({
                 mass: parseFloat(mat.mass), density: mat.density, hardness: parseFloat(mat.hardness),
@@ -841,11 +1107,12 @@ class OmniConsole {
 
     renderForgeHistory() {
         const list = document.getElementById('forgeHistory');
+        if (!list) return;
         list.innerHTML = '';
         this.forgeHistory.forEach(m => {
             const item = document.createElement('div');
             item.className = 'forge-history-item';
-            item.innerHTML = `<div class="forge-history-swatch" style="background:${m.color}"></div><div class="forge-history-name">${m.name}</div>`;
+            item.innerHTML = `<div class="forge-history-swatch" style="background:${this._safeHexColor(m.color, '#888888')}"></div><div class="forge-history-name">${this._escapeHtml(m.name)}</div>`;
             item.addEventListener('click', () => this.showMaterialResult(m));
             list.appendChild(item);
         });
@@ -859,12 +1126,13 @@ class OmniConsole {
                 if (!this.engine.wasmReady) { this.addChatMessage('assistant', 'WASM not connected.'); return; }
                 this.addChatMessage('assistant', 'Exporting as .' + fmt.toUpperCase() + '...');
                 const progress = document.getElementById('exportProgress');
-                progress.style.display = '';
+                if (progress) progress.style.display = '';
+                if (this._exportProgressInterval) clearInterval(this._exportProgressInterval);
                 let pct = 0;
-                const iv = setInterval(() => {
+                this._exportProgressInterval = setInterval(() => {
                     pct += 20;
                     if (pct >= 100) {
-                        pct = 100; clearInterval(iv);
+                        pct = 100; clearInterval(this._exportProgressInterval); this._exportProgressInterval = null;
                         try {
                             if (fmt === 'csv') {
                                 const meta = this.engine.exportCSV('world.csv');
@@ -910,10 +1178,12 @@ class OmniConsole {
                         } catch (e) {
                             this.addChatMessage('assistant', 'Export error: ' + e.message);
                         }
-                        setTimeout(() => { progress.style.display = 'none'; }, 500);
+                        setTimeout(() => { if (progress) progress.style.display = 'none'; }, 500);
                     }
-                    document.getElementById('exportProgressFill').style.width = pct + '%';
-                    document.getElementById('exportProgressText').textContent = Math.round(pct) + '% — Exporting...';
+                    const exportProgressFill = document.getElementById('exportProgressFill');
+                    const exportProgressText = document.getElementById('exportProgressText');
+                    if (exportProgressFill) exportProgressFill.style.width = pct + '%';
+                    if (exportProgressText) exportProgressText.textContent = Math.round(pct) + '% — Exporting...';
                 }, 100);
             });
         });
@@ -948,16 +1218,20 @@ class OmniConsole {
 
     renderBookmarks() {
         const list = document.getElementById('bookmarkList');
+        if (!list) return;
         if (this.bookmarks.length === 0) { list.innerHTML = '<div class="bookmark-empty">No bookmarks saved</div>'; return; }
         list.innerHTML = '';
         this.bookmarks.forEach((b, i) => {
             const item = document.createElement('div');
             item.className = 'bookmark-item';
-            item.innerHTML = `<span class="bookmark-name">${b.name}</span><span class="bookmark-coords">${b.x},${b.y},${b.z}</span><span class="bookmark-del" data-idx="${i}">✕</span>`;
+            item.innerHTML = `<span class="bookmark-name">${this._escapeHtml(b.name)}</span><span class="bookmark-coords">${b.x},${b.y},${b.z}</span><span class="bookmark-del" data-idx="${i}">✕</span>`;
             item.querySelector('.bookmark-name').addEventListener('click', () => {
-                document.getElementById('tpX').value = b.x;
-                document.getElementById('tpY').value = b.y;
-                document.getElementById('tpZ').value = b.z;
+                const tpX = document.getElementById('tpX');
+                const tpY = document.getElementById('tpY');
+                const tpZ = document.getElementById('tpZ');
+                if (tpX) tpX.value = b.x;
+                if (tpY) tpY.value = b.y;
+                if (tpZ) tpZ.value = b.z;
                 this.engine.teleportCamera(b.x, b.y, b.z);
             });
             item.querySelector('.bookmark-del').addEventListener('click', (e) => {
@@ -970,9 +1244,35 @@ class OmniConsole {
 
     /* ====== AI BRAIN SWITCHER ====== */
     bindBrain() {
+        const STORAGE_KEY = 'openmind_brain_config';
+
+        const saveBrainConfig = (config) => {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+        };
+        const loadBrainConfig = () => {
+            try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null; } catch (e) { return null; }
+        };
+        const clearBrainConfig = () => {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+            const dot = document.getElementById('brainStatusDot');
+            const text = document.getElementById('brainStatusText');
+            if (dot) dot.style.background = '';
+            if (text) text.textContent = 'Disconnected';
+            this.llm.apiKey = '';
+            this.llm.provider = 'groq';
+            this.llm.endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+            this.llm.model = 'llama-3.3-70b-versatile';
+            const providerEl = document.getElementById('llmProvider');
+            const apiKeyEl = document.getElementById('llmApiKey');
+            const endpointEl = document.getElementById('cloudEndpoint');
+            if (providerEl) providerEl.value = 'groq';
+            if (apiKeyEl) apiKeyEl.value = '';
+            if (endpointEl) endpointEl.value = '';
+        };
+
         const brainCloudBtn = document.getElementById('brainCloudBtn');
         if (brainCloudBtn) brainCloudBtn.addEventListener('click', () => {
-            brainCloudBtn.classList.add('active');
+            if (brainCloudBtn) brainCloudBtn.classList.add('active');
             const brainLocalBtn = document.getElementById('brainLocalBtn');
             if (brainLocalBtn) brainLocalBtn.classList.remove('active');
             const cloudSettings = document.getElementById('brainCloudSettings');
@@ -982,7 +1282,7 @@ class OmniConsole {
         });
         const brainLocalBtn = document.getElementById('brainLocalBtn');
         if (brainLocalBtn) brainLocalBtn.addEventListener('click', () => {
-            brainLocalBtn.classList.add('active');
+            if (brainLocalBtn) brainLocalBtn.classList.add('active');
             if (brainCloudBtn) brainCloudBtn.classList.remove('active');
             const localSettings = document.getElementById('brainLocalSettings');
             if (localSettings) localSettings.style.display = '';
@@ -995,8 +1295,14 @@ class OmniConsole {
                 groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
                 openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
                 anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
-                google: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
+                google: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+                custom: []
             };
+            const isCustom = e.target.value === 'custom';
+            const modelRow = document.getElementById('cloudModelRow');
+            const customModelRow = document.getElementById('cloudCustomModelRow');
+            if (modelRow) { if (isCustom) modelRow.classList.add('hidden'); else modelRow.classList.remove('hidden'); }
+            if (customModelRow) { if (isCustom) customModelRow.classList.remove('hidden'); else customModelRow.classList.add('hidden'); }
             const sel = document.getElementById('llmModel');
             if (sel) {
                 sel.innerHTML = '';
@@ -1007,6 +1313,13 @@ class OmniConsole {
                 });
             }
         });
+
+        const brainClearBtn = document.getElementById('brainClearBtn');
+        if (brainClearBtn) brainClearBtn.addEventListener('click', () => {
+            clearBrainConfig();
+            this.addChatMessage('assistant', 'Brain config cleared.');
+        });
+
         const brainTestBtn = document.getElementById('brainTestBtn');
         if (brainTestBtn) brainTestBtn.addEventListener('click', () => {
             const dot = document.getElementById('brainStatusDot');
@@ -1015,9 +1328,9 @@ class OmniConsole {
             if (text) text.textContent = 'Testing...';
             const isLocal = document.getElementById('brainLocalBtn')?.classList.contains('active');
             const provider = isLocal ? document.getElementById('localProvider')?.value : document.getElementById('llmProvider')?.value;
-            const endpoint = isLocal ? document.getElementById('localEndpoint')?.value : '';
+            const endpoint = isLocal ? document.getElementById('localEndpoint')?.value : document.getElementById('cloudEndpoint')?.value || '';
             const apiKey = document.getElementById('llmApiKey')?.value || '';
-            const model = document.getElementById('llmModel')?.value;
+            const model = isLocal ? document.getElementById('localModel')?.value : (provider === 'custom' ? document.getElementById('cloudCustomModel')?.value : document.getElementById('llmModel')?.value);
 
             if (isLocal) {
                 fetch(endpoint + '/api/tags', { method: 'GET' }).then(r => {
@@ -1025,6 +1338,7 @@ class OmniConsole {
                         this.llm.setConfig('openai', '', endpoint + '/v1/chat/completions', model || 'local');
                         if (dot) dot.style.background = 'var(--success)';
                         if (text) text.textContent = 'Connected to ' + provider;
+                        saveBrainConfig({ mode: 'local', provider, endpoint, model });
                     } else {
                         if (dot) dot.style.background = 'var(--error)';
                         if (text) text.textContent = 'Failed: ' + provider;
@@ -1034,14 +1348,43 @@ class OmniConsole {
                     if (text) text.textContent = provider + ' not reachable';
                 });
             } else if (apiKey && apiKey.length > 5) {
-                this.llm.setConfig(provider, apiKey, '', model);
+                this.llm.setConfig(provider, apiKey, endpoint || '', model || '');
                 if (dot) dot.style.background = 'var(--success)';
-                if (text) text.textContent = 'Configured: ' + provider + ' / ' + model;
+                if (text) text.textContent = 'Configured: ' + provider + (model ? ' / ' + model : '');
+                saveBrainConfig({ mode: 'cloud', provider, apiKey, endpoint, model });
             } else {
                 if (dot) dot.style.background = 'var(--error)';
                 if (text) text.textContent = 'No API key provided';
             }
         });
+
+        const saved = loadBrainConfig();
+        if (saved) {
+            if (saved.mode === 'cloud' && saved.apiKey) {
+                this.llm.setConfig(saved.provider, saved.apiKey, saved.endpoint || '', saved.model || '');
+                const providerEl = document.getElementById('llmProvider');
+                const apiKeyEl = document.getElementById('llmApiKey');
+                const endpointEl = document.getElementById('cloudEndpoint');
+                if (providerEl && saved.provider) providerEl.value = saved.provider;
+                if (apiKeyEl) apiKeyEl.value = saved.apiKey;
+                if (endpointEl && saved.endpoint) endpointEl.value = saved.endpoint;
+                if (providerEl) providerEl.dispatchEvent(new Event('change'));
+                const dot = document.getElementById('brainStatusDot');
+                const text = document.getElementById('brainStatusText');
+                if (dot) dot.style.background = 'var(--success)';
+                if (text) text.textContent = 'Restored: ' + saved.provider + (saved.model ? ' / ' + saved.model : '');
+                this.addChatMessage('assistant', 'Restored saved brain config: ' + saved.provider);
+            } else if (saved.mode === 'local' && saved.endpoint) {
+                this.llm.setConfig('openai', '', saved.endpoint + '/v1/chat/completions', saved.model || 'local');
+                const localEndpoint = document.getElementById('localEndpoint');
+                if (localEndpoint) localEndpoint.value = saved.endpoint;
+                const dot = document.getElementById('brainStatusDot');
+                const text = document.getElementById('brainStatusText');
+                if (dot) dot.style.background = 'var(--success)';
+                if (text) text.textContent = 'Restored: ' + saved.provider;
+                this.addChatMessage('assistant', 'Restored saved brain config: ' + saved.provider);
+            }
+        }
     }
 
     /* ====== MISC ====== */
@@ -1084,12 +1427,12 @@ class OmniConsole {
     /* ====== INTERACTIVE OBJECTS ====== */
     bindInteractive() {
         document.getElementById('intCreateBtn')?.addEventListener('click', () => {
-            const type = document.getElementById('intCreateType').value;
+            const type = document.getElementById('intCreateType')?.value || 'door';
             const x = parseInt(document.getElementById('intCreateX')?.value || '0');
             const y = parseInt(document.getElementById('intCreateY')?.value || '2');
             const z = parseInt(document.getElementById('intCreateZ')?.value || '0');
             const obj = this.interactive.create(type, x, y, z);
-            this.engine.setBlock(x, y, z, this.getBlockForType(type));
+            if (this.engine?.wasmReady) this.engine.setBlock(x, y, z, this.getBlockForType(type));
             if (this.renderer) {
                 this.renderer.updateFromWASM();
                 this.renderer.rebuildMesh();
@@ -1116,11 +1459,11 @@ class OmniConsole {
             div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg-alt);border-radius:6px;margin:3px 0;font-size:11px';
             const v = VisualDefs[obj.type];
             div.innerHTML = `
-                <span style="color:${this.colorToCSS(obj.getColor())}">${obj.type}</span>
+                <span style="color:${this._safeHexColor(this.colorToCSS(obj.getColor()), '#94a3b8')}">${this._escapeHtml(obj.type)}</span>
                 <span style="color:var(--text-dim)">(${obj.x},${obj.y},${obj.z})</span>
-                <span style="color:var(--success)">${obj.state}</span>
-                <button class="int-interact-btn" data-id="${obj.id}" style="margin-left:auto;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Interact</button>
-                <button class="int-remove-btn" data-id="${obj.id}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button>
+                <span style="color:var(--success)">${this._escapeHtml(obj.state)}</span>
+                <button class="int-interact-btn" data-id="${this._escapeHtml(String(obj.id))}" style="margin-left:auto;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Interact</button>
+                <button class="int-remove-btn" data-id="${this._escapeHtml(String(obj.id))}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button>
             `;
             list.appendChild(div);
         }
@@ -1148,7 +1491,7 @@ class OmniConsole {
         const map = {
             DOOR: 30, BUTTON: 31, LEVER: 36, SWITCH: 36, CHEST: 35,
             LAMP: 34, PISTON: 38, CONVEYOR: 37, TRAPDOOR: 39, FIRE: 40,
-            LOCK: 33, LAUNCHER: 32, SENSOR: 1, TIMER: 1, COMPUTER: 1
+            LOCK: 33, LAUNCHER: 32, SENSOR: 9, TIMER: 10, COMPUTER: 11
         };
         return map[type] || 1;
     }
@@ -1161,12 +1504,12 @@ class OmniConsole {
     /* ====== INVENTORY ====== */
     bindInventory() {
         this.renderInventory();
-        this.inventory.player.on(() => this.renderInventory());
+        if (this.inventory?.player?.on) this.inventory.player.on(() => this.renderInventory());
     }
 
     renderInventory() {
         const grid = document.getElementById('invGrid');
-        if (!grid) return;
+        if (!grid || !this.inventory?.player) return;
         grid.innerHTML = '';
         for (let i = 0; i < this.inventory.player.size; i++) {
             const slot = this.inventory.player.getSlot(i);
@@ -1194,10 +1537,13 @@ class OmniConsole {
         document.getElementById('craftAiBtn')?.addEventListener('click', () => {
             const prompt = document.getElementById('craftAiPrompt')?.value || '';
             if (prompt.length < 3) return;
-            const recipe = this.crafting.generateFromAI(prompt);
-            this.crafting.addRecipe(recipe);
-            this.refreshCraftingList();
-            this.addChatMessage('assistant', `Generated recipe: ${recipe.name} (${recipe.ingredients.map(i => i.item + ' x' + i.count).join(' + ')} → ${recipe.result} x${recipe.count})`);
+            try {
+                const recipe = this.crafting.generateFromAI(prompt);
+                if (!recipe) return;
+                this.crafting.addRecipe(recipe);
+                this.refreshCraftingList();
+                this.addChatMessage('assistant', `Generated recipe: ${recipe.name} (${recipe.ingredients.map(i => i.item + ' x' + i.count).join(' + ')} → ${recipe.result} x${recipe.count})`);
+            } catch (e) { this.log('Craft AI failed: ' + e.message, 'warn'); }
         });
     }
 
@@ -1212,10 +1558,10 @@ class OmniConsole {
             const ings = r.ingredients.map(i => `${i.has >= i.count ? '✓' : '✗'} ${i.item} ${i.has}/${i.count}`).join(', ');
             div.innerHTML = `
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text)">${r.name} x${r.count}</span>
-                    <button class="craft-btn" data-recipe="${r.id}" ${r.canCraft ? '' : 'disabled'} style="padding:2px 8px;border:1px solid ${r.canCraft ? 'var(--success)' : 'var(--border)'};border-radius:4px;background:${r.canCraft ? 'rgba(34,197,94,0.2)' : 'var(--bg)'};color:${r.canCraft ? 'var(--success)' : 'var(--text-dim)'};cursor:${r.canCraft ? 'pointer' : 'not-allowed'};font-size:10px">Craft</button>
+                    <span style="color:var(--text)">${this._escapeHtml(r.name)} x${r.count}</span>
+                    <button class="craft-btn" data-recipe="${this._escapeHtml(String(r.id))}" ${r.canCraft ? '' : 'disabled'} style="padding:2px 8px;border:1px solid ${r.canCraft ? 'var(--success)' : 'var(--border)'};border-radius:4px;background:${r.canCraft ? 'rgba(34,197,94,0.2)' : 'var(--bg)'};color:${r.canCraft ? 'var(--success)' : 'var(--text-dim)'};cursor:${r.canCraft ? 'pointer' : 'not-allowed'};font-size:10px">Craft</button>
                 </div>
-                <div style="color:var(--text-dim);font-size:10px;margin-top:2px">${ings}</div>
+                <div style="color:var(--text-dim);font-size:10px;margin-top:2px">${this._escapeHtml(ings)}</div>
             `;
             list.appendChild(div);
         }
@@ -1263,11 +1609,12 @@ class OmniConsole {
             e.target.classList.toggle('active', this.postProcessing?.vignetteEnabled);
         });
         document.getElementById('soundVolume')?.addEventListener('input', (e) => {
-            this.sound.setVolume(parseFloat(e.target.value));
+            if (this.sound) this.sound.setVolume(parseFloat(e.target.value));
             const label = document.getElementById('soundVolumeLabel');
             if (label) label.textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
         });
         document.getElementById('toggleSound')?.addEventListener('click', (e) => {
+            if (!this.sound) return;
             this.sound.enabled = !this.sound.enabled;
             e.target.textContent = this.sound.enabled ? 'ON' : 'OFF';
             e.target.classList.toggle('active', this.sound.enabled);
@@ -1470,13 +1817,13 @@ class OmniConsole {
         for (const bp of this.blueprints.getAll()) {
             const div = document.createElement('div');
             div.style.cssText = 'padding:6px 8px;background:var(--bg-alt);border-radius:6px;margin:3px 0;font-size:11px;display:flex;justify-content:space-between;align-items:center';
-            div.innerHTML = `<span style="color:var(--text)">${bp.name} (${bp.width}x${bp.height}x${bp.depth})</span><div style="display:flex;gap:4px"><button class="bp-place-btn" data-id="${bp.id}" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Place</button><button class="bp-del-btn" data-id="${bp.id}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button></div>`;
+            div.innerHTML = `<span style="color:var(--text)">${this._escapeHtml(bp.name)} (${bp.width}x${bp.height}x${bp.depth})</span><div style="display:flex;gap:4px"><button class="bp-place-btn" data-id="${this._escapeHtml(String(bp.id))}" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;font-size:10px">Place</button><button class="bp-del-btn" data-id="${this._escapeHtml(String(bp.id))}" style="padding:2px 6px;border:1px solid var(--error);border-radius:4px;background:var(--bg);color:var(--error);cursor:pointer;font-size:10px">X</button></div>`;
             list.appendChild(div);
         }
         list.querySelectorAll('.bp-place-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const bp = this.blueprints.get(btn.dataset.id);
-                if (bp) {
+                if (bp && this.engine?.wasmReady) {
                     this.buildingHistory.record('place_bp', 'Place blueprint: ' + bp.name);
                     this.blueprints.place(bp, 0, 2, 0, this.engine);
                     if (this.renderer) {
@@ -1503,8 +1850,9 @@ class OmniConsole {
         for (const entry of timeline) {
             const div = document.createElement('div');
             div.style.cssText = `padding:4px 8px;background:${entry.isCurrent ? 'rgba(139,92,246,0.2)' : 'var(--bg-alt)'};border-radius:4px;margin:2px 0;font-size:10px;cursor:pointer;border-left:2px solid ${entry.isCurrent ? '#8b5cf6' : 'var(--border)'}`;
-            div.innerHTML = `<span style="color:var(--text)">${entry.description}</span><span style="color:var(--text-dim);margin-left:4px">${entry.blockCount} blocks</span>`;
+            div.innerHTML = `<span style="color:var(--text)">${this._escapeHtml(entry.description)}</span><span style="color:var(--text-dim);margin-left:4px">${entry.blockCount} blocks</span>`;
             div.addEventListener('click', () => {
+                if (!this.engine?.wasmReady) return;
                 this.buildingHistory.jumpTo(entry.index);
                 if (this.renderer) {
                     this.renderer.updateFromWASM();

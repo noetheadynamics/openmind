@@ -352,17 +352,41 @@ body.light .brain-select-row select, body.light .brain-input-row input { backgro
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
     .topbar-btn span { display: none; }
-    .topbar-btn { padding: 6px 8px; }
+    .topbar-btn { padding: 6px 8px; min-width: 44px; min-height: 44px; }
     .console-main > .panel { left: 8px; width: calc(100vw - 16px); --panel-width: 100%; }
     .stats-overlay { display: none; }
-    .console-log { width: calc(100vw - 24px); }
+    .console-log { width: calc(100vw - 24px); bottom: 80px; }
+    .topbar-btn-small { width: 44px; height: 44px; }
+    .status-pill { padding: 8px 12px; }
+    button, .action-btn, .toggle-btn, .icon-btn { min-height: 44px; min-width: 44px; }
+    .panel-collapse-btn { width: 44px; height: 44px; }
+    .prompt-suggestions .suggestion-chip { padding: 10px 14px; font-size: 13px; }
+    .time-btn { min-width: 44px; min-height: 44px; font-size: 13px; }
+    .preset-btn { min-height: 44px; font-size: 13px; }
+    .export-btn { min-height: 44px; min-width: 44px; }
+    .env-card { min-height: 44px; }
+    .tc-slot { min-width: 44px; min-height: 44px; }
 }
 @media (max-width: 480px) {
-    .top-bar { height: 40px; }
-    .topbar-btn { padding: 4px 6px; font-size: 10px; }
+    .top-bar { height: 40px; padding: 0 6px; }
+    .topbar-btn { padding: 4px 6px; font-size: 10px; min-width: 40px; min-height: 40px; }
     .panel-body { padding: 4px; font-size: 11px; }
     .topbar-btn-group { display: none; }
     .stats-overlay { font-size: 10px; }
+    .top-bar-left .logo-text { font-size: 12px; }
+    .top-bar-left .logo-version { display: none; }
+    .top-bar-center { gap: 0; }
+    .panel-header { padding: 8px 10px; }
+    .panel-header h2 { font-size: 12px; }
+    .prompt-chat { max-height: 120px; }
+    .agent-list { max-height: 120px; }
+    .chat-message .chat-bubble { font-size: 12px; }
+    textarea#promptInput { font-size: 13px; }
+}
+@media (max-width: 360px) {
+    .topbar-btn svg { width: 12px; height: 12px; }
+    .topbar-btn { padding: 2px 4px; min-width: 34px; min-height: 34px; }
+    .panel { --panel-width: 100%; left: 4px; width: calc(100vw - 8px); }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

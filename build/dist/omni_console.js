@@ -31,6 +31,8 @@ class OmniConsole {
         this.importExport = new ImportExportBuilding();
         this.buildingHistory = new BuildingHistory();
         this.loadingScreen = null;
+        this.touchControls = null;
+        this._isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.activePanel = 'prompt';
         this.promptHistory = [];
         this.historyIndex = -1;
@@ -111,6 +113,10 @@ class OmniConsole {
             const btn = document.getElementById('playPauseBtn');
             if (btn) btn.textContent = this.engine.paused ? '▶' : '⏸';
         });
+        if (this._isMobile && typeof TouchControls !== 'undefined') {
+            this.touchControls = new TouchControls();
+            console.log('[Mobile] TouchControls initialized');
+        }
         this.errorHandler.setNotificationFn((entry) => {
             if (this.notifications) this.notifications.error(entry.title + ': ' + entry.userMessage);
         });
@@ -186,6 +192,18 @@ class OmniConsole {
                     this.liveStats.setRenderer(this.renderer);
                     this.liveStats.start(1000);
                 }
+                this._applyMobileThrottles();
+                if (this.touchControls) {
+                    this.touchControls.init(this.engine, this.renderer);
+                    this.touchControls.enable();
+                    this.touchControls.onBlockPlace = () => {
+                        if (this.worldEditor) this.worldEditor.placeBlock();
+                    };
+                    this.touchControls.onBlockBreak = () => {
+                        if (this.worldEditor) this.worldEditor.breakBlock();
+                    };
+                    console.log('[Mobile] TouchControls activated');
+                }
                 this.startSimulation();
             }
             this.updateConnectionStatus(ok);
@@ -208,6 +226,19 @@ class OmniConsole {
         if (text) { text.textContent = connected ? 'Connected' : 'Offline'; }
     }
 
+    _applyMobileThrottles() {
+        if (!this._isMobile) return;
+        console.log('[Mobile] Applying performance throttles');
+        if (this.renderer) {
+            this.renderer.drawDistance = 8;
+        }
+        if (this.particles) {
+            this.particles.enabled = true;
+        }
+        this._mobileSimTickRate = 500;
+        this._mobileUseIdleCallback = true;
+    }
+
     startSimulation() {
         if (this.engine.simRunning) return;
         this.engine.simRunning = true;
@@ -226,7 +257,8 @@ class OmniConsole {
         if (!this.engine.simRunning) return;
         if (!this.engine.paused) {
             const now = performance.now();
-            if (now - this.lastTickTime >= 500) {
+            const tickRate = this._mobileSimTickRate || 500;
+            if (now - this.lastTickTime >= tickRate) {
                 const dt = 1/60;
                 try {
                     this.engine.tick(dt);
@@ -234,19 +266,29 @@ class OmniConsole {
                     this.interactive.tick(dt);
                     this.particles.update(dt);
                     if (this.physicsVisuals) this.physicsVisuals.update(dt);
-                    this._skyUpdateCount = (this._skyUpdateCount || 0) + 1;
-                    if (this.skybox && this._skyUpdateCount % 4 === 0) {
-                        const tod = this.engine.getTimeOfDay();
-                        const w = this.engine.getWeather();
-                        const wn = this.engine.weatherNames[w.type] || 'clear';
-                        this.skybox.update(dt, tod, wn);
-                    }
-                    this._waterUpdateCount = (this._waterUpdateCount || 0) + 1;
-                    if (this.water && this._waterUpdateCount % 2 === 0) {
-                        const tod = this.engine.getTimeOfDay();
-                        const w = this.engine.getWeather();
-                        const wn = this.engine.weatherNames[w.type] || 'clear';
-                        this.water.update(dt, tod, wn);
+                    const doBackground = this._mobileUseIdleCallback
+                        ? (typeof requestIdleCallback !== 'undefined')
+                        : true;
+                    const updateSkyWater = () => {
+                        this._skyUpdateCount = (this._skyUpdateCount || 0) + 1;
+                        if (this.skybox && this._skyUpdateCount % 4 === 0) {
+                            const tod = this.engine.getTimeOfDay();
+                            const w = this.engine.getWeather();
+                            const wn = this.engine.weatherNames[w.type] || 'clear';
+                            this.skybox.update(dt, tod, wn);
+                        }
+                        this._waterUpdateCount = (this._waterUpdateCount || 0) + 1;
+                        if (this.water && this._waterUpdateCount % 2 === 0) {
+                            const tod = this.engine.getTimeOfDay();
+                            const w = this.engine.getWeather();
+                            const wn = this.engine.weatherNames[w.type] || 'clear';
+                            this.water.update(dt, tod, wn);
+                        }
+                    };
+                    if (doBackground) {
+                        requestIdleCallback(updateSkyWater, { timeout: 300 });
+                    } else {
+                        updateSkyWater();
                     }
                 } catch (e) {
                     this.log('Tick error: ' + e.message, 'err');
@@ -254,7 +296,7 @@ class OmniConsole {
                 this.lastTickTime = now;
             }
         }
-        this._simLoopTimeout = setTimeout(() => this.simLoop(), 200);
+        this._simLoopTimeout = setTimeout(() => this.simLoop(), this._mobileUseIdleCallback ? 300 : 200);
     }
 
     updateStats() {
