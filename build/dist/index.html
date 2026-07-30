@@ -188,8 +188,23 @@
                 <button class="panel-collapse-btn" data-target="panel-agents">−</button>
             </div>
             <div class="panel-body">
+                <div class="flex-row-wrap" style="margin-bottom:8px">
+                    <button class="action-btn btn-sm" id="agentSpawnBtn">+ Spawn Agent</button>
+                    <button class="action-btn btn-sm" id="agentStopAllBtn" style="background:rgba(239,68,68,0.15);color:var(--error);border:1px solid rgba(239,68,68,0.3)">Stop All</button>
+                </div>
+                <div class="agent-spawn-form hidden" id="agentSpawnForm">
+                    <div class="brain-input-row"><label>Name</label><input type="text" id="agentCfgName" value="Builder" placeholder="Agent name"></div>
+                    <div class="brain-select-row"><label>Role</label><select id="agentCfgRole"><option value="builder">Builder</option><option value="farmer">Farmer</option><option value="explorer">Explorer</option><option value="miner">Miner</option><option value="guard">Guard</option><option value="artist">Artist</option></select></div>
+                    <div class="brain-select-row"><label>Personality</label><select id="agentCfgPersonality"><option value="helpful">Helpful</option><option value="cautious">Cautious</option><option value="creative">Creative</option><option value="efficient">Efficient</option><option value="thorough">Thorough</option></select></div>
+                    <div class="brain-select-row"><label>Goal</label><select id="agentCfgGoal"><option value="build_house">Build a House</option><option value="build_tower">Build a Tower</option><option value="build_garden">Build a Garden</option><option value="build_bridge">Build a Bridge</option><option value="custom">Custom Task</option></select></div>
+                    <div class="brain-input-row hidden" id="agentCustomGoalRow"><label>Custom Goal</label><input type="text" id="agentCfgCustomGoal" placeholder="Describe the task..."></div>
+                    <div class="flex-row-wrap" style="gap:6px;margin-top:6px">
+                        <button class="action-btn btn-sm" id="agentSpawnConfirm">Spawn & Start</button>
+                        <button class="icon-btn" id="agentSpawnCancel">Cancel</button>
+                    </div>
+                </div>
                 <div class="agent-list" id="agentList">
-                    <div class="agent-empty">No agents in world</div>
+                    <div class="agent-empty">No agents. Click + Spawn to create one.</div>
                 </div>
                 <div class="agent-inspector hidden" id="agentInspector">
                     <div class="agent-inspector-header">
@@ -198,33 +213,26 @@
                             <div class="agent-name" id="agentName">Agent</div>
                             <div class="agent-role" id="agentRole">Unknown</div>
                         </div>
-                        <button class="icon-btn" id="agentCloseBtn" aria-label="Close agent inspector">✕</button>
+                        <button class="icon-btn" id="agentCloseBtn" aria-label="Close">✕</button>
                     </div>
                     <div class="agent-stats-grid">
                         <div class="agent-stat"><span class="stat-label">Health</span><div class="stat-bar"><div class="stat-bar-fill health-bar" id="agentHealth"></div></div><span class="stat-val" id="agentHealthVal">100</span></div>
-                        <div class="agent-stat"><span class="stat-label">Hunger</span><div class="stat-bar"><div class="stat-bar-fill hunger-bar" id="agentHunger"></div></div><span class="stat-val" id="agentHungerVal">0</span></div>
                         <div class="agent-stat"><span class="stat-label">Energy</span><div class="stat-bar"><div class="stat-bar-fill energy-bar" id="agentEnergy"></div></div><span class="stat-val" id="agentEnergyVal">100</span></div>
                         <div class="agent-stat"><span class="stat-label">Position</span><span class="stat-val" id="agentPosition">0, 0, 0</span></div>
+                        <div class="agent-stat"><span class="stat-label">State</span><span class="stat-val" id="agentState">idle</span></div>
                     </div>
                     <div class="agent-section">
                         <h4>Current Goal</h4>
                         <div class="agent-goal" id="agentGoal">None</div>
                     </div>
                     <div class="agent-section">
-                        <h4>Recent Memories</h4>
-                        <div class="agent-memories" id="agentMemories"></div>
+                        <h4>Recent Activity</h4>
+                        <div class="agent-thoughts" id="agentThoughts" style="max-height:120px;overflow-y:auto"></div>
                     </div>
-                    <div class="agent-section">
-                        <h4>Thoughts</h4>
-                        <div class="agent-thoughts" id="agentThoughts"></div>
-                    </div>
-                    <div class="agent-section">
-                        <h4>Relationships</h4>
-                        <div class="agent-relationships" id="agentRelationships"></div>
-                    </div>
-                    <div class="agent-section">
-                        <h4>Inventory</h4>
-                        <div class="agent-inventory" id="agentInventory"></div>
+                    <div class="flex-row-wrap" style="margin-top:8px">
+                        <button class="action-btn btn-sm" id="agentStartBtn">Start</button>
+                        <button class="action-btn btn-sm" id="agentStopBtn" style="background:rgba(239,68,68,0.15);color:var(--error)">Stop</button>
+                        <button class="action-btn btn-sm" id="agentDeleteBtn" style="background:rgba(239,68,68,0.15);color:var(--error);border:1px solid rgba(239,68,68,0.3)">Delete</button>
                     </div>
                 </div>
             </div>
@@ -616,6 +624,11 @@
     <script src="skybox.js?v=3"></script>
     <script src="post_processing.js"></script>
     <script src="llm_client.js?v=3"></script>
+    <script src="agent_prompt_builder.js"></script>
+    <script src="action_parser.js"></script>
+    <script src="agent_think.js"></script>
+    <script src="agent_config.js"></script>
+    <script src="agent_management.js"></script>
     <script src="network.js"></script>
     <script src="permissions.js"></script>
     <script src="player_entities.js"></script>

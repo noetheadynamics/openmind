@@ -36,7 +36,6 @@ class OmniConsole {
         this.bookmarks = [];
         this.forgeHistory = [];
         this.currentEnv = 'earth';
-        this.selectedAgent = -1;
         this.lightMode = false;
         this.lastTickTime = 0;
         this.suggestions = [
@@ -136,6 +135,11 @@ class OmniConsole {
                 });
                 this.llm.engine = this.engine;
                 this.llm.renderer = this.renderer;
+                if (this.agentManager) {
+                    this.agentManager.setLLM(this.llm);
+                    this.agentManager.setEngine(this.engine);
+                    this.agentManager.setRenderer(this.renderer);
+                }
                 this.interactive.setEngine(this.engine);
                 this.interactive.setRenderer(this.renderer);
                 this.inventory.setEngine(this.engine);
@@ -706,102 +710,168 @@ class OmniConsole {
 
     /* ====== AGENT DASHBOARD ====== */
     bindAgents() {
-        this.refreshAgents();
+        this.agentManager = new AgentManager();
+        this.selectedAgentId = null;
+
+        this.agentManager.onAgentMessage = (agentId, msg) => {
+            this.addChatMessage('assistant', `[${agentId}] ${msg}`);
+        };
+        this.agentManager.onAgentUpdate = () => this.refreshAgents();
+
+        this.agentManager.init().then(() => {
+            if (this.llm) this.agentManager.setLLM(this.llm);
+            if (this.engine) this.agentManager.setEngine(this.engine);
+            if (this.renderer) this.agentManager.setRenderer(this.renderer);
+            this.refreshAgents();
+        });
+
+        const spawnBtn = document.getElementById('agentSpawnBtn');
+        if (spawnBtn) spawnBtn.addEventListener('click', () => {
+            const form = document.getElementById('agentSpawnForm');
+            if (form) form.classList.toggle('hidden');
+        });
+
+        const spawnCancel = document.getElementById('agentSpawnCancel');
+        if (spawnCancel) spawnCancel.addEventListener('click', () => {
+            const form = document.getElementById('agentSpawnForm');
+            if (form) form.classList.add('hidden');
+        });
+
+        const agentCfgGoal = document.getElementById('agentCfgGoal');
+        if (agentCfgGoal) agentCfgGoal.addEventListener('change', (e) => {
+            const row = document.getElementById('agentCustomGoalRow');
+            if (row) { if (e.target.value === 'custom') row.classList.remove('hidden'); else row.classList.add('hidden'); }
+        });
+
+        const spawnConfirm = document.getElementById('agentSpawnConfirm');
+        if (spawnConfirm) spawnConfirm.addEventListener('click', () => {
+            const cfg = new AgentConfig();
+            cfg.apply({
+                name: document.getElementById('agentCfgName')?.value || 'Agent',
+                role: document.getElementById('agentCfgRole')?.value || 'builder',
+                personality: document.getElementById('agentCfgPersonality')?.value || 'helpful',
+                goalPreset: document.getElementById('agentCfgGoal')?.value || 'custom',
+                customGoal: document.getElementById('agentCfgCustomGoal')?.value || ''
+            });
+            const agent = this.agentManager.spawn(cfg);
+            this.agentManager.startAgent(agent.id);
+            this.addChatMessage('assistant', `Spawned agent "${agent.name}" (${agent.role}) with goal: ${agent.currentGoal?.description || 'none'}`);
+            this.refreshAgents();
+            const form = document.getElementById('agentSpawnForm');
+            if (form) form.classList.add('hidden');
+        });
+
         const agentCloseBtn = document.getElementById('agentCloseBtn');
         if (agentCloseBtn) agentCloseBtn.addEventListener('click', () => {
             const inspector = document.getElementById('agentInspector');
-            if (inspector) inspector.style.display = 'none';
-            this.selectedAgent = -1;
+            if (inspector) inspector.classList.add('hidden');
+            this.selectedAgentId = null;
             document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
         });
+
+        const agentStartBtn = document.getElementById('agentStartBtn');
+        if (agentStartBtn) agentStartBtn.addEventListener('click', () => {
+            if (this.selectedAgentId) {
+                this.agentManager.startAgent(this.selectedAgentId);
+                this.addChatMessage('assistant', `Started agent ${this.selectedAgentId}`);
+                this.refreshAgents();
+            }
+        });
+
+        const agentStopBtn = document.getElementById('agentStopBtn');
+        if (agentStopBtn) agentStopBtn.addEventListener('click', () => {
+            if (this.selectedAgentId) {
+                this.agentManager.stopAgent(this.selectedAgentId);
+                this.addChatMessage('assistant', `Stopped agent ${this.selectedAgentId}`);
+                this.refreshAgents();
+            }
+        });
+
+        const agentDeleteBtn = document.getElementById('agentDeleteBtn');
+        if (agentDeleteBtn) agentDeleteBtn.addEventListener('click', async () => {
+            if (this.selectedAgentId) {
+                await this.agentManager.delete(this.selectedAgentId);
+                this.addChatMessage('assistant', `Deleted agent ${this.selectedAgentId}`);
+                this.selectedAgentId = null;
+                const inspector = document.getElementById('agentInspector');
+                if (inspector) inspector.classList.add('hidden');
+                this.refreshAgents();
+            }
+        });
+
+        const stopAllBtn = document.getElementById('agentStopAllBtn');
+        if (stopAllBtn) stopAllBtn.addEventListener('click', () => {
+            this.agentManager.stopAll();
+            this.addChatMessage('assistant', 'Stopped all agents.');
+            this.refreshAgents();
+        });
+
         if (this.agentInterval) clearInterval(this.agentInterval);
-        this.agentInterval = setInterval(() => this.refreshAgents(), 5000);
+        this.agentInterval = setInterval(() => this.refreshAgents(), 3000);
     }
 
     refreshAgents() {
         const list = document.getElementById('agentList');
         if (!list) return;
-        const count = this.engine.getAgentCount();
-        if (count === 0) { list.innerHTML = '<div class="agent-empty">No agents in world</div>'; return; }
+        const agents = this.agentManager ? this.agentManager.getAll() : [];
+        if (agents.length === 0) {
+            list.innerHTML = '<div class="agent-empty">No agents. Click + Spawn to create one.</div>';
+            return;
+        }
         list.innerHTML = '';
-        for (let i = 0; i < count; i++) {
-            const a = this.engine.getAgentData(i);
-            if (!a || !a.exists) continue;
-            const role = a.isPredator ? 'predator' : (a.isDiseased ? 'diseased' : 'prey');
+        for (const a of agents) {
+            const stateColors = { idle: '#94a3b8', thinking: '#facc15', acting: '#22c55e', error: '#ef4444' };
+            const stateColor = stateColors[a.state] || '#94a3b8';
             const card = document.createElement('div');
-            card.className = 'agent-card' + (this.selectedAgent === i ? ' selected' : '');
-            card.innerHTML = `<div class="agent-avatar-sm">${String.fromCharCode(65 + (a.id || i) % 26)}</div><div class="agent-info"><div class="agent-card-name">Agent #${this._escapeHtml(String(a.id !== undefined ? a.id : i))}</div><div class="agent-card-role">${this._escapeHtml(role)}</div></div><div class="agent-card-hp">HP:${Math.round(a.health || 0)}</div>`;
-            card.addEventListener('click', () => this.inspectAgent(i));
+            card.className = 'agent-card' + (this.selectedAgentId === a.id ? ' selected' : '');
+            card.innerHTML = `<div class="agent-avatar-sm" style="background:${stateColor}20;color:${stateColor}">${(a.name||'?')[0].toUpperCase()}</div><div class="agent-info"><div class="agent-card-name">${this._escapeHtml(a.name)}</div><div class="agent-card-role">${this._escapeHtml(a.role)} · <span style="color:${stateColor}">${a.state}</span></div></div>`;
+            card.addEventListener('click', () => this.inspectAgent(a.id));
             list.appendChild(card);
         }
     }
 
-    inspectAgent(idx) {
-        this.selectedAgent = idx;
-        const a = this.engine.getAgentData(idx);
-        if (!a || !a.exists) return;
+    inspectAgent(agentId) {
+        const agent = this.agentManager?.get(agentId);
+        if (!agent) return;
+        this.selectedAgentId = agentId;
+        document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
         const inspector = document.getElementById('agentInspector');
-        if (inspector) inspector.style.display = '';
-        const name = 'Agent #' + (a.id !== undefined ? a.id : idx);
-        const role = a.isPredator ? 'predator' : (a.isDiseased ? 'diseased' : 'prey');
+        if (inspector) inspector.classList.remove('hidden');
+
         const agentAvatar = document.getElementById('agentAvatar');
-        if (agentAvatar) agentAvatar.textContent = name[0].toUpperCase();
+        if (agentAvatar) agentAvatar.textContent = (agent.name || '?')[0].toUpperCase();
         const agentName = document.getElementById('agentName');
-        if (agentName) agentName.textContent = name;
+        if (agentName) agentName.textContent = agent.name;
         const agentRole = document.getElementById('agentRole');
-        if (agentRole) agentRole.textContent = role + (a.isAlive ? '' : ' (dead)');
+        if (agentRole) agentRole.textContent = agent.role + ' · ' + agent.personality;
         const agentHealth = document.getElementById('agentHealth');
-        if (agentHealth) agentHealth.style.width = (a.health || 0) + '%';
+        if (agentHealth) agentHealth.style.width = (agent.health || 0) + '%';
         const agentHealthVal = document.getElementById('agentHealthVal');
-        if (agentHealthVal) agentHealthVal.textContent = Math.round(a.health || 0);
-        const agentHunger = document.getElementById('agentHunger');
-        if (agentHunger) agentHunger.style.width = (a.hunger || 0) + '%';
-        const agentHungerVal = document.getElementById('agentHungerVal');
-        if (agentHungerVal) agentHungerVal.textContent = Math.round(a.hunger || 0);
+        if (agentHealthVal) agentHealthVal.textContent = Math.round(agent.health || 0);
         const agentEnergy = document.getElementById('agentEnergy');
-        if (agentEnergy) agentEnergy.style.width = (a.energy || 0) + '%';
+        if (agentEnergy) agentEnergy.style.width = (agent.energy || 0) + '%';
         const agentEnergyVal = document.getElementById('agentEnergyVal');
-        if (agentEnergyVal) agentEnergyVal.textContent = Math.round(a.energy || 0);
+        if (agentEnergyVal) agentEnergyVal.textContent = Math.round(agent.energy || 0);
         const agentPosition = document.getElementById('agentPosition');
-        if (agentPosition) agentPosition.textContent = Math.round(a.x||0) + ', ' + Math.round(a.y||0) + ', ' + Math.round(a.z||0);
-        const agentGoal = document.getElementById('agentGoal');
-        if (agentGoal) agentGoal.textContent = a.isAlive ? (a.isPredator ? 'Hunt prey' : 'Find food') : 'Dead';
+        if (agentPosition) agentPosition.textContent = `${Math.round(agent.x)}, ${Math.round(agent.y)}, ${Math.round(agent.z)}`;
+        const agentState = document.getElementById('agentState');
+        if (agentState) agentState.textContent = agent.state;
 
-        const memDiv = document.getElementById('agentMemories');
-        if (memDiv) {
-            memDiv.innerHTML = '';
-            const mems = ['Position: ' + Math.round(a.x||0) + ',' + Math.round(a.y||0) + ',' + Math.round(a.z||0)];
-            if (a.vx || a.vz) mems.push('Velocity: ' + (a.vx||0).toFixed(1) + ',' + (a.vy||0).toFixed(1) + ',' + (a.vz||0).toFixed(1));
-            if (a.isDiseased) mems.push('Status: Diseased');
-            if (!a.isAlive) mems.push('Status: Dead');
-            mems.forEach(m => { const d = document.createElement('div'); d.className = 'memory-entry'; d.textContent = m; memDiv.appendChild(d); });
+        const goalDiv = document.getElementById('agentGoal');
+        if (goalDiv) goalDiv.textContent = agent.currentGoal?.description || 'None';
+
+        const thoughtsDiv = document.getElementById('agentThoughts');
+        if (thoughtsDiv) {
+            thoughtsDiv.innerHTML = '';
+            const recent = agent.memories.slice(-15).reverse();
+            for (const m of recent) {
+                const d = document.createElement('div');
+                d.style.cssText = 'padding:3px 0;font-size:10px;border-bottom:1px solid var(--border);color:var(--text2)';
+                const typeColors = { action: '#22c55e', thought: '#6366f1', error: '#ef4444', complete: '#4ade80', warning: '#facc15', info: '#94a3b8' };
+                d.innerHTML = `<span style="color:${typeColors[m.type] || '#94a3b8'}">[${m.type}]</span> ${this._escapeHtml((m.text || '').substring(0, 150))}`;
+                thoughtsDiv.appendChild(d);
+            }
         }
-
-        const agentThoughts = document.getElementById('agentThoughts');
-        if (agentThoughts) agentThoughts.textContent = a.isAlive ? (a.isPredator ? 'Looking for prey nearby...' : 'Scanning for food and safety.') : 'No longer active.';
-
-        const relDiv = document.getElementById('agentRelationships');
-        if (relDiv) {
-            relDiv.innerHTML = '';
-            const relType = a.isPredator ? 'enemy' : 'friend';
-            const chip = document.createElement('span');
-            chip.className = 'rel-chip ' + relType;
-            chip.textContent = (a.isPredator ? 'Prey' : 'Allies') + ' (' + relType + ')';
-            relDiv.appendChild(chip);
-        }
-
-        const invDiv = document.getElementById('agentInventory');
-        if (invDiv) {
-            invDiv.innerHTML = '';
-            const invChip = document.createElement('span');
-            invChip.className = 'inv-chip';
-            invChip.textContent = a.isPredator ? 'Claws' : 'Food stores';
-            invDiv.appendChild(invChip);
-        }
-
-        document.querySelectorAll('.agent-card').forEach((c, i) => {
-            c.classList.toggle('selected', i === idx);
-        });
     }
 
     /* ====== ENVIRONMENT PRESETS ====== */
