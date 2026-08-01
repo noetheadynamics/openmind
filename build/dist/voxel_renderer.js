@@ -31,6 +31,7 @@ class VoxelRenderer {
             { id: 13, name: 'DIAMOND', color: 0x00FFFF },
             { id: 14, name: 'COAL', color: 0x2F4F4F },
             { id: 15, name: 'BEDROCK', color: 0x1C1C1C },
+            { id: 16, name: 'ASH', color: 0x333333 },
             { id: 17, name: 'TNT', color: 0xFF4500 },
             { id: 18, name: 'SNOW', color: 0xFFFAFA },
             { id: 30, name: 'DOOR', color: 0x8B4513, interactive: true },
@@ -242,8 +243,7 @@ class VoxelRenderer {
             if (e.key >= '1' && e.key <= '9') {
                 this.hotbarIndex = parseInt(e.key);
                 this.updateHotbar();
-            }
-        };
+            }        };
         this._boundOnKeyUp = (e) => { this.keys[e.key] = false; };
         window.addEventListener('keydown', this._boundOnKeyDown);
         window.addEventListener('keyup', this._boundOnKeyUp);
@@ -480,13 +480,18 @@ class VoxelRenderer {
             slot.textContent = bt.name.substring(0, 4);
             slot.title = bt.name + (bt.interactive ? ' [interactive]' : '') + ' [' + (i + 1) + ']';
             slot.addEventListener('click', () => {
-                this.hotbarIndex = Math.min(i + 1, 9);
-                this.selectedBlockType = bt.id;
+                this.hotbarIndex = i + 1;
+                this.setSelectedBlockType(bt.id);
                 this.updateHotbar();
             });
             bar.appendChild(slot);
         });
-        this.selectedBlockType = types[this.hotbarIndex - 1]?.id || 1;
+        this.setSelectedBlockType(types[this.hotbarIndex - 1]?.id || 1);
+    }
+
+    setSelectedBlockType(typeId) {
+        this.selectedBlockType = typeId;
+        if (this.worldEditor) this.worldEditor.setSelectedType(typeId);
     }
 
     setEngine(engine) { this.engine = engine; }

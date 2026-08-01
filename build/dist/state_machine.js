@@ -228,7 +228,7 @@
                 });
             }
 
-            const signal = currentTrans[action] && currentTrans[action].signal;
+            const signal = currentTrans.signal;
             if (signal !== undefined && signal !== null) {
                 entry.lastSignal = signal;
                 this.emit(id, 'signal', { signal, from: oldState, to: nextState });

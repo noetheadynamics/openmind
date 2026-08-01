@@ -9,6 +9,7 @@ class NetworkManager {
         this.localPeer = null;
         this.peers = new Map(); // peerId -> { connection, playerName, playerColor }
         this.dataChannels = new Map();
+        this.hostPeerId = null;
 
         this.ws = null;
         this.wsReconnectTimer = null;
@@ -63,36 +64,55 @@ class NetworkManager {
     }
 
     async connectSignaling() {
-        try {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-
-            this.ws = new WebSocket(this.signalingUrl);
-            this.ws.binaryType = 'arraybuffer';
-
-            this.ws.onopen = () => {
-                this.wsReconnectDelay = 1000;
-                this.sendSignaling({ type: 'register', playerId: this.playerId });
-            };
-
-            this.ws.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-                    this.handleSignalingMessage(msg);
-                } catch (e) {
-                    if (this.onError) this.onError('Failed to parse signaling message');
-                }
-            };
-
-            this.ws.onclose = () => {
-                this.scheduleReconnect();
-            };
-
-            this.ws.onerror = (err) => {
-                if (this.onError) this.onError('Signaling server unavailable. Running in offline mode.');
-            };
-        } catch (e) {
-            if (this.onError) this.onError('Could not reach signaling server');
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+        if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+            return this._waitOpen();
         }
+
+        this.ws = new WebSocket(this.signalingUrl);
+        this.ws.binaryType = 'arraybuffer';
+
+        this.ws.onopen = () => {
+            this.wsReconnectDelay = 1000;
+            this.sendSignaling({ type: 'register', playerId: this.playerId });
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                this.handleSignalingMessage(msg);
+            } catch (e) {
+                if (this.onError) this.onError('Failed to parse signaling message');
+            }
+        };
+
+        this.ws.onclose = () => {
+            this.scheduleReconnect();
+        };
+
+        this.ws.onerror = (err) => {
+            if (this.onError) this.onError('Signaling server unavailable. Running in offline mode.');
+        };
+
+        return this._waitOpen();
+    }
+
+    _waitOpen() {
+        const ws = this.ws;
+        if (!ws) return Promise.resolve();
+        if (ws.readyState === WebSocket.OPEN) return Promise.resolve();
+        if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) return Promise.resolve();
+        return new Promise((resolve) => {
+            const timer = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSED) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+            const onOpen = () => { clearInterval(timer); resolve(); };
+            ws.addEventListener('open', onOpen);
+            setTimeout(() => { clearInterval(timer); ws.removeEventListener('open', onOpen); }, 10000);
+        });
     }
 
     scheduleReconnect() {
@@ -404,7 +424,8 @@ class NetworkManager {
     }
 
     sendToHost(data) {
-        const hostChannel = this.dataChannels.get('host');
+        const hostId = this.hostPeerId || (this.peers.size ? this.peers.keys().next().value : null);
+        const hostChannel = hostId ? this.dataChannels.get(hostId) : null;
         if (hostChannel && hostChannel.readyState === 'open') {
             hostChannel.send(data);
         }

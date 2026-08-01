@@ -83,10 +83,20 @@
         }
 
         captureSnapshot() {
-            if (!this.engine || !this.engine.getBlockData) return null;
+            if (!this.engine || !this.engine.saveWorld) return null;
             try {
-                const data = this.engine.getBlockData(0, 0, 0, 64, 32, 64);
-                return data ? Array.from(data) : null;
+                const json = this.engine.saveWorld();
+                if (!json) return null;
+                const world = JSON.parse(json);
+                const blocks = world.blocks || [];
+                const data = new Array(blocks.length * 4);
+                for (let i = 0; i < blocks.length; i++) {
+                    data[i * 4] = blocks[i].x;
+                    data[i * 4 + 1] = blocks[i].y;
+                    data[i * 4 + 2] = blocks[i].z;
+                    data[i * 4 + 3] = blocks[i].type;
+                }
+                return data;
             } catch (e) { return null; }
         }
 
@@ -102,15 +112,12 @@
         }
 
         countBlocks() {
-            if (!this.engine || !this.engine.getBlockData) return 0;
+            if (!this.engine || !this.engine.saveWorld) return 0;
             try {
-                const data = this.engine.getBlockData(0, 0, 0, 64, 32, 64);
-                if (!data) return 0;
-                let count = 0;
-                for (let i = 3; i < data.length; i += 4) {
-                    if (data[i] > 0) count++;
-                }
-                return count;
+                const json = this.engine.saveWorld();
+                if (!json) return 0;
+                const world = JSON.parse(json);
+                return (world.blocks || []).length;
             } catch (e) { return 0; }
         }
 
@@ -118,6 +125,7 @@
             if (!this.db) return;
             try {
                 const tx = this.db.transaction('history', 'readwrite');
+                tx.onerror = () => {};
                 tx.objectStore('history').put(entry);
             } catch (e) {}
         }
@@ -140,8 +148,11 @@
             this.entries = [];
             this.currentIndex = -1;
             if (this.db) {
-                const tx = this.db.transaction('history', 'readwrite');
-                tx.objectStore('history').clear();
+                try {
+                    const tx = this.db.transaction('history', 'readwrite');
+                    tx.onerror = () => {};
+                    tx.objectStore('history').clear();
+                } catch (e) {}
             }
             this.emit('clear');
         }

@@ -52,6 +52,10 @@ class HostSystem {
         this.startTickLoop();
         this.network.startPing();
 
+        this.network.connectSignaling().then(() => {
+            this.network.sendSignaling({ type: 'create-room', roomCode: this.roomCode, playerId: this.network.playerId });
+        });
+
         return this.roomCode;
     }
 

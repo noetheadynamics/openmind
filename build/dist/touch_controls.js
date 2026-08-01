@@ -119,7 +119,7 @@ class TouchControls {
 
             #tc-look-zone {
                 position:fixed; top:0; right:0; width:55%; height:100%; z-index:9997;
-                display:none; background:transparent;
+                display:none; background:transparent; pointer-events:none;
             }
 
             #tc-crosshair {
@@ -613,7 +613,7 @@ class TouchControls {
             this.velocity.y = 0;
             this.grounded = true;
         }
-        if (this.camera) this.camera.position.set(this._playerPos.x, this._playerPos.y, this._playerPos.z);
+        if (this.camera && this.joystick.active) this.camera.position.set(this._playerPos.x, this._playerPos.y, this._playerPos.z);
     }
 
     _showHints() {
@@ -645,10 +645,12 @@ class TouchControls {
     getPlayerPosition() { return { ...this._playerPos }; }
     getPlayerYaw() { return this._playerYaw; }
     getPlayerPitch() { return this._playerPitch; }
-    isTouchDevice() { return 'ontouchstart' in window || navigator.maxTouchPoints > 0; }
+    isTouchDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    }
 
     static detect() {
-        return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
     }
 
     destroy() {

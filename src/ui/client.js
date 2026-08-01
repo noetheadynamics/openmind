@@ -40,14 +40,17 @@ class ClientSystem {
 
         this.network.startPing();
 
-        console.log('[CLIENT] Joining room:', roomCode);
+        this.network.connectSignaling().then(() => {
+            this.network.sendSignaling({ type: 'join-room', roomCode: this.roomCode, playerId: this.network.playerId });
+        });
+
         return true;
     }
 
     handleHostConnected(peerId, name, color) {
         if (!peerId) return;
-        console.log('[CLIENT] Connected to host');
         this.hostPeerId = peerId;
+        this.network.hostPeerId = peerId;
         this.isConnected = true;
         this.isJoining = false;
         this.reconnectAttempts = 0;
@@ -63,24 +66,26 @@ class ClientSystem {
     }
 
     handleHostDisconnected() {
-        console.log('[CLIENT] Disconnected from host');
         this.isConnected = false;
         this.hostPeerId = null;
         if (this.onDisconnected) this.onDisconnected();
 
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            console.log('[CLIENT] Reconnect attempt', this.reconnectAttempts);
             this.reconnectTimer = setTimeout(() => {
                 if (!this.isConnected && this.roomCode) {
                     this.network.connectSignaling();
+                    setTimeout(() => {
+                        if (this.network.ws?.readyState === 1) {
+                            this.network.ws.send(JSON.stringify({ type: 'join-room', roomCode: this.roomCode }));
+                        }
+                    }, 500);
                 }
             }, 2000 * this.reconnectAttempts);
         }
     }
 
     handleWorldSync(msg) {
-        console.log('[CLIENT] World sync received, version:', msg.version);
         this.worldVersion = msg.version;
 
         if (this.engine && msg.blocks) {
@@ -116,9 +121,8 @@ class ClientSystem {
                 }
             }
 
-            console.log('[CLIENT] Loaded', blockCount, 'blocks from host');
         } catch (e) {
-            console.error('[CLIENT] Failed to parse world data:', e);
+            // parse error handled silently
         }
     }
 
@@ -128,6 +132,8 @@ class ClientSystem {
         if (this.engine) {
             if (msg.action === 'place' || msg.action === 'break') {
                 this.engine.setBlock(msg.x, msg.y, msg.z, msg.blockType || 0);
+            } else if (msg.action === 'interact') {
+                this.worldVersion = msg.version || this.worldVersion + 1;
             }
         }
 
@@ -147,7 +153,6 @@ class ClientSystem {
     }
 
     handleError(err) {
-        console.error('[CLIENT] Error:', err);
         if (this.onError) this.onError(err);
     }
 

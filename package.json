@@ -7,16 +7,32 @@
     "start": "python -m http.server 8080",
     "build:wasm": "bash build/build_wasm.sh",
     "build:native": "bash build/build_native.sh",
-    "test": "bash build/run_tests.sh"
+    "test": "bash build/run_tests.sh",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "bump": "node scripts/bump_version.js",
+    "publish:update": "publish.bat"
   },
   "keywords": [
-    "voxel", "physics", "simulation", "ai", "llm",
-    "agent", "sandbox", "webassembly", "wasm"
+    "voxel",
+    "physics",
+    "simulation",
+    "ai",
+    "llm",
+    "agent",
+    "sandbox",
+    "webassembly",
+    "wasm"
   ],
   "author": "OpenMind",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/noetheadynamics/openmind"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "serve": "^14.2.6"
   }
 }

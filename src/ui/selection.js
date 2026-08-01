@@ -61,7 +61,7 @@
             this.emit('select', { mode: 'box', blocks: this.blocks, dimensions: this.getDimensions() });
         }
 
-        brushAt(x, y, z, engine) {
+        brushAt(x, y, z) {
             this.blocks.clear();
             const r = Math.floor(this.brushSize / 2);
             for (let dx = -r; dx <= r; dx++)
@@ -84,15 +84,19 @@
 
         selectAll(engine) {
             this.blocks.clear();
-            if (engine && engine.getBlockData) {
-                const data = engine.getBlockData(0, 0, 0, 64, 32, 64);
-                if (data) {
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i + 3] > 0) {
-                            this.blocks.add(`${data[i]},${data[i+1]},${data[i+2]}`);
+            if (engine && engine.saveWorld) {
+                try {
+                    const json = engine.saveWorld();
+                    if (json) {
+                        const world = JSON.parse(json);
+                        const blocks = world.blocks || [];
+                        for (const b of blocks) {
+                            if (b.type > 0) {
+                                this.blocks.add(`${b.x},${b.y},${b.z}`);
+                            }
                         }
                     }
-                }
+                } catch (e) {}
             }
             this.emit('select', { mode: 'all', blocks: this.blocks, dimensions: this.getDimensions() });
         }

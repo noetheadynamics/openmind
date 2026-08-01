@@ -84,17 +84,19 @@
 
         selectAll(engine) {
             this.blocks.clear();
-            if (engine && engine.getBlockData) {
-                const stats = engine.getWorldStats ? engine.getWorldStats() : null;
-                const sz = stats?.size || 64;
-                const data = engine.getBlockData(0, 0, 0, sz, Math.min(32, sz), sz);
-                if (data) {
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i + 3] > 0) {
-                            this.blocks.add(`${data[i]},${data[i+1]},${data[i+2]}`);
+            if (engine && engine.saveWorld) {
+                try {
+                    const json = engine.saveWorld();
+                    if (json) {
+                        const world = JSON.parse(json);
+                        const blocks = world.blocks || [];
+                        for (const b of blocks) {
+                            if (b.type > 0) {
+                                this.blocks.add(`${b.x},${b.y},${b.z}`);
+                            }
                         }
                     }
-                }
+                } catch (e) {}
             }
             this.emit('select', { mode: 'all', blocks: this.blocks, dimensions: this.getDimensions() });
         }

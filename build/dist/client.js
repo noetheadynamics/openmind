@@ -40,12 +40,17 @@ class ClientSystem {
 
         this.network.startPing();
 
+        this.network.connectSignaling().then(() => {
+            this.network.sendSignaling({ type: 'join-room', roomCode: this.roomCode, playerId: this.network.playerId });
+        });
+
         return true;
     }
 
     handleHostConnected(peerId, name, color) {
         if (!peerId) return;
         this.hostPeerId = peerId;
+        this.network.hostPeerId = peerId;
         this.isConnected = true;
         this.isJoining = false;
         this.reconnectAttempts = 0;

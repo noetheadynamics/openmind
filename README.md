@@ -26,6 +26,7 @@
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
 - [Building from Source](#building-from-source)
+- [Desktop App (Tauri)](#desktop-app-tauri)
 - [Testing](#testing)
 - [Roadmap](#roadmap)
 - [License](#license)
@@ -643,6 +644,64 @@ copy build\wasm\openmind.* build\dist\
 ```
 
 **Output:** `build/dist/openmind.js` (WASM loader) + `build/dist/openmind.wasm` (compiled engine, ~253KB)
+
+---
+
+## Desktop App (Tauri)
+
+OpenMind can be packaged as a lightweight desktop application using [Tauri](https://tauri.app/) — delivering native performance with a ~14MB binary vs Electron's ~100MB+.
+
+**Prerequisites:**
+- [Rust](https://www.rust-lang.org/tools/install) (rustup + stable-msvc toolchain)
+- [Node.js](https://nodejs.org/) (v18+)
+- [Tauri CLI](https://tauri.app/start/) (`npm install -D @tauri-apps/cli`)
+- [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 10/11)
+
+**Build the Desktop App:**
+
+```bash
+# Install dependencies
+npm install
+
+# Run in development mode (starts dev server on :8080 + opens native window)
+npm run tauri:dev
+
+# Build for production
+npm run tauri:build
+```
+
+**Output:**
+
+| Platform | Installer |
+|----------|-----------|
+| Windows (MSI) | `src-tauri/target/release/bundle/msi/OpenMind_1.0.0_x64_en-US.msi` |
+| Windows (NSIS) | `src-tauri/target/release/bundle/nsis/OpenMind_1.0.0_x64-setup.exe` |
+| macOS | `src-tauri/target/release/bundle/dmg/OpenMind.app` |
+| Linux | `src-tauri/target/release/bundle/appimage/OpenMind.AppImage` |
+
+**Automatic Updates:**
+
+The desktop app checks GitHub Releases hourly and prompts to install new versions automatically.
+
+```bash
+# Push a new update (bumps version, builds, creates GitHub release)
+npm run publish:update -- 1.1.0
+# or
+publish.bat 1.1.0
+```
+
+Installed apps will then:
+1. Detect the new release on GitHub
+2. Show an "Update Available" notification
+3. Download the new installer
+4. Install it silently and relaunch automatically
+
+**Why Tauri?**
+- **Small Bundle:** ~14MB (vs Electron's ~100MB+)
+- **Native Performance:** Runs with system WebView, no bundled Chromium
+- **Same UI:** All HTML/JS/CSS and WASM engine remain unchanged
+- **Local File Access:** Save/load worlds directly to your file system via native dialogs
+- **Cross-Platform:** Windows, macOS, and Linux from the same codebase
 
 ---
 

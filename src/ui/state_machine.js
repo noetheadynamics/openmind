@@ -228,7 +228,7 @@
                 });
             }
 
-            const signal = currentTrans[action] && currentTrans[action].signal;
+            const signal = currentTrans.signal;
             if (signal !== undefined && signal !== null) {
                 entry.lastSignal = signal;
                 this.emit(id, 'signal', { signal, from: oldState, to: nextState });
@@ -276,6 +276,7 @@
         }
 
         addTimer(id, durationMs, callback) {
+            if (this.timers.has(id)) { this.timers.get(id).done = true; }
             this.timers.set(id, { duration: durationMs, start: Date.now(), callback, done: false });
         }
 

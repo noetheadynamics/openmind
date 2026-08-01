@@ -130,7 +130,6 @@
                 const old = this.meshes.get(key);
                 this.scene.remove(old);
                 if (old.geometry) old.geometry.dispose();
-                if (old.material) old.material.dispose();
             }
 
             const positions = [];

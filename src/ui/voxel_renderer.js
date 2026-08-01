@@ -31,6 +31,7 @@ class VoxelRenderer {
             { id: 13, name: 'DIAMOND', color: 0x00FFFF },
             { id: 14, name: 'COAL', color: 0x2F4F4F },
             { id: 15, name: 'BEDROCK', color: 0x1C1C1C },
+            { id: 16, name: 'ASH', color: 0x333333 },
             { id: 17, name: 'TNT', color: 0xFF4500 },
             { id: 18, name: 'SNOW', color: 0xFFFAFA },
             { id: 30, name: 'DOOR', color: 0x8B4513, interactive: true },
@@ -56,6 +57,20 @@ class VoxelRenderer {
         this.prevMouse = { x: 0, y: 0 };
         this.keys = {};
         this.hotbarIndex = 1;
+        this._launchIntervals = new Map();
+        this._boundOnResize = null;
+        this._boundOnThemeChange = null;
+        this._boundOnKeyDown = null;
+        this._boundOnKeyUp = null;
+
+        this.fov = 70;
+        this.shadowSize = 60;
+        this.shadowMapSize = 2048;
+        this.zoomSpeed = 0.05;
+        this.rocketOrbitDistance = 30;
+        this.rocketAnimInterval = 50;
+        this.cameraSpeed = 0.5;
+        this.wasmPollInterval = 1000;
 
         this.init();
     }
@@ -66,7 +81,7 @@ class VoxelRenderer {
         this.scene = new THREE.Scene();
         this.updateTheme();
 
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+        this.camera = new THREE.PerspectiveCamera(this.fov, window.innerWidth / window.innerHeight, 0.1, 500);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -81,8 +96,8 @@ class VoxelRenderer {
         this.sunLight = new THREE.DirectionalLight(0xfff4e0, 1.0);
         this.sunLight.position.set(50, 80, 30);
         this.sunLight.castShadow = true;
-        const s = 60;
-        this.sunLight.shadow.mapSize.set(2048, 2048);
+        const s = this.shadowSize;
+        this.sunLight.shadow.mapSize.set(this.shadowMapSize, this.shadowMapSize);
         this.sunLight.shadow.camera.left = -s;
         this.sunLight.shadow.camera.right = s;
         this.sunLight.shadow.camera.top = s;
@@ -107,12 +122,13 @@ class VoxelRenderer {
         this.raycaster = new THREE.Raycaster();
         this.initControls();
         this.initHotbar();
-        window.addEventListener('resize', () => this.onResize());
-
-        window.addEventListener('themechange', (e) => {
+        this._boundOnResize = () => this.onResize();
+        this._boundOnThemeChange = (e) => {
             this.isLightMode = e.detail.light;
             this.updateTheme();
-        });
+        };
+        window.addEventListener('resize', this._boundOnResize);
+        window.addEventListener('themechange', this._boundOnThemeChange);
     }
 
     updateTheme() {
@@ -140,65 +156,97 @@ class VoxelRenderer {
 
     initControls() {
         const el = this.renderer.domElement;
+        this._mouseDownPos = { x: 0, y: 0 };
+        this._mouseMoved = false;
+        this._dragThreshold = 5;
 
         el.addEventListener('mousedown', (e) => {
-            if (e.button === 2) {
-                this.isRightDrag = true;
+            this._mouseDownPos = { x: e.clientX, y: e.clientY };
+            this._mouseMoved = false;
+
+            if (e.button === 0 || e.button === 2) {
                 this.isDragging = true;
+                this.isRightDrag = (e.button === 2);
+                this.isLeftDrag = (e.button === 0);
                 this.prevMouse = { x: e.clientX, y: e.clientY };
                 e.preventDefault();
-                return;
-            }
-            if (e.button === 0 && e.shiftKey) {
-                this.removeBlock();
-                return;
-            }
-            if (e.button === 0) {
-                const target = this.getTargetBlock();
-                if (target) {
-                    const bt = this.blockTypes.find(b => b.id === this.getBlockAt(target.x, target.y, target.z)?.type);
-                    if (bt && bt.interactive) {
-                        this.interact(target.x, target.y, target.z, bt);
-                    } else {
-                        this.placeBlock();
-                    }
-                } else {
-                    this.placeBlock();
-                }
             }
         });
 
         el.addEventListener('mousemove', (e) => {
             this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            if (this.isDragging && this.isRightDrag) {
-                const dx = e.clientX - this.prevMouse.x;
-                const dy = e.clientY - this.prevMouse.y;
-                this.cameraSpherical.theta -= dx * 0.005;
-                this.cameraSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraSpherical.phi + dy * 0.005));
+
+            if (this.isDragging) {
+                const dx = e.clientX - this._mouseDownPos.x;
+                const dy = e.clientY - this._mouseDownPos.y;
+                if (Math.abs(dx) > this._dragThreshold || Math.abs(dy) > this._dragThreshold) {
+                    this._mouseMoved = true;
+                }
+
+                const mdx = e.clientX - this.prevMouse.x;
+                const mdy = e.clientY - this.prevMouse.y;
+
+                if (this.isRightDrag) {
+                    const forward = new THREE.Vector3();
+                    this.camera.getWorldDirection(forward);
+                    const up = new THREE.Vector3(0, 1, 0);
+                    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+                    const camUp = new THREE.Vector3().crossVectors(right, forward).normalize();
+                    this.cameraTarget.add(right.multiplyScalar(-mdx * 0.03));
+                    this.cameraTarget.add(camUp.multiplyScalar(mdy * 0.03));
+                } else if (this.isLeftDrag) {
+                    this.cameraSpherical.theta -= mdx * 0.005;
+                    this.cameraSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraSpherical.phi + mdy * 0.005));
+                }
+
                 this.prevMouse = { x: e.clientX, y: e.clientY };
                 this.updateCamera();
             }
         });
 
-        el.addEventListener('mouseup', () => { this.isDragging = false; this.isRightDrag = false; });
-        el.addEventListener('mouseleave', () => { this.isDragging = false; this.isRightDrag = false; this.highlightMesh.visible = false; });
+        el.addEventListener('mouseup', (e) => {
+            const wasDragging = this._mouseMoved;
+            this.isDragging = false;
+            this.isRightDrag = false;
+            this.isLeftDrag = false;
+
+            if (wasDragging) return;
+
+            if (e.button === 0 && !e.shiftKey) {
+                if (this.worldEditor) {
+                    this.worldEditor.placeBlock();
+                } else {
+                    this.placeBlock();
+                }
+            } else if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+                if (this.worldEditor) {
+                    this.worldEditor.removeBlock();
+                } else {
+                    this.removeBlock();
+                }
+            }
+        });
+
         el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        el.addEventListener('mouseleave', () => { this.isDragging = false; this.isRightDrag = false; this.isLeftDrag = false; this.highlightMesh.visible = false; });
 
         el.addEventListener('wheel', (e) => {
             e.preventDefault();
-            this.cameraSpherical.radius = Math.max(3, Math.min(150, this.cameraSpherical.radius + e.deltaY * 0.05));
+            this.cameraSpherical.radius = Math.max(3, Math.min(150, this.cameraSpherical.radius + e.deltaY * this.zoomSpeed));
             this.updateCamera();
         }, { passive: false });
 
-        window.addEventListener('keydown', (e) => {
+        this._boundOnKeyDown = (e) => {
             this.keys[e.key] = true;
             if (e.key >= '1' && e.key <= '9') {
                 this.hotbarIndex = parseInt(e.key);
                 this.updateHotbar();
-            }
-        });
-        window.addEventListener('keyup', (e) => { this.keys[e.key] = false; });
+            }        };
+        this._boundOnKeyUp = (e) => { this.keys[e.key] = false; };
+        window.addEventListener('keydown', this._boundOnKeyDown);
+        window.addEventListener('keyup', this._boundOnKeyUp);
         this.updateCamera();
     }
 
@@ -345,7 +393,7 @@ class VoxelRenderer {
         }
     }
 
-    animateBlock(x, y, z, opacity) {
+    animateBlock(x, y, z) {
         this.dirty = true;
     }
 
@@ -361,22 +409,25 @@ class VoxelRenderer {
 
     animateLaunch(x, y, z) {
         const key = `${x},${y},${z}`;
+        if (this._launchIntervals.has(key)) clearInterval(this._launchIntervals.get(key));
         let yOffset = 0;
         const interval = setInterval(() => {
             yOffset += 0.5;
             this.blocks.delete(`${x},${y + Math.floor(yOffset) - 1},${z}`);
             this.blocks.set(`${x},${y + Math.floor(yOffset)},${z}`, { x, y: y + Math.floor(yOffset), z, type: 32 });
             this.dirty = true;
-            if (yOffset > 30) {
+            if (yOffset > this.rocketOrbitDistance) {
                 clearInterval(interval);
+                this._launchIntervals.delete(key);
                 this.blocks.delete(`${x},${y + Math.floor(yOffset)},${z}`);
                 this.dirty = true;
                 this.addChatMessage('Rocket reached orbit!');
             }
-        }, 50);
+        }, this.rocketAnimInterval);
+        this._launchIntervals.set(key, interval);
     }
 
-    animateMaterialChange(x, y, z, material) {
+    animateMaterialChange(x, y, z) {
         this.dirty = true;
     }
 
@@ -429,16 +480,23 @@ class VoxelRenderer {
             slot.textContent = bt.name.substring(0, 4);
             slot.title = bt.name + (bt.interactive ? ' [interactive]' : '') + ' [' + (i + 1) + ']';
             slot.addEventListener('click', () => {
-                this.hotbarIndex = Math.min(i + 1, 9);
-                this.selectedBlockType = bt.id;
+                this.hotbarIndex = i + 1;
+                this.setSelectedBlockType(bt.id);
                 this.updateHotbar();
             });
             bar.appendChild(slot);
         });
-        this.selectedBlockType = types[this.hotbarIndex - 1]?.id || 1;
+        this.setSelectedBlockType(types[this.hotbarIndex - 1]?.id || 1);
+    }
+
+    setSelectedBlockType(typeId) {
+        this.selectedBlockType = typeId;
+        if (this.worldEditor) this.worldEditor.setSelectedType(typeId);
     }
 
     setEngine(engine) { this.engine = engine; }
+
+    setWorldEditor(editor) { this.worldEditor = editor; }
 
     updateFromWASM() {
         if (!this.engine || !this.engine.wasmReady) return;
@@ -449,16 +507,14 @@ class VoxelRenderer {
             if (this.blocks.size > 0) { this.blocks.clear(); this.dirty = true; }
             return;
         }
-        const step = Math.max(1, Math.floor(blockCount / 20000));
-        let scanned = 0;
-        for (let x = 0; x < 256 && scanned < 50000; x += step) {
-            for (let y = 0; y < 256 && scanned < 50000; y += step) {
-                for (let z = 0; z < 256 && scanned < 50000; z += step) {
+        const step = Math.max(1, Math.min(4, Math.floor(blockCount / 10000)));
+        for (let x = 0; x < 256; x += step) {
+            for (let y = 0; y < 256; y += step) {
+                for (let z = 0; z < 256; z += step) {
                     const data = this.engine.getBlock(x, y, z);
                     if (data && data.exists && data.blockType !== 0) {
                         newBlocks.set(`${x},${y},${z}`, { x, y, z, type: data.blockType });
                     }
-                    scanned++;
                 }
             }
         }
@@ -475,10 +531,9 @@ class VoxelRenderer {
     rebuildMesh() {
         if (!this.dirty || !window.THREE || !this.scene) return;
         this.dirty = false;
-        this.scene.traverse((c) => { if (c.isInstancedMesh || c.isGroup) { if (c.geometry && c.geometry !== this.boxGeometry) c.geometry.dispose(); if (c.material) c.material.dispose(); } });
         const toRemove = [];
-        this.scene.traverse((c) => { if (c.isGroup || c.isInstancedMesh) toRemove.push(c); });
-        toRemove.forEach(c => this.scene.remove(c));
+        this.scene.traverse((c) => { if (c.userData && c.userData.isVoxelGroup) toRemove.push(c); });
+        toRemove.forEach(c => { this.scene.remove(c); c.traverse((ch) => { if (ch.isInstancedMesh) { if (ch.geometry && ch.geometry !== this.boxGeometry) ch.geometry.dispose(); if (ch.material) ch.material.dispose(); } }); });
         if (this.blocks.size === 0) return;
 
         if (!this.boxGeometry) this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -489,6 +544,7 @@ class VoxelRenderer {
         });
 
         const group = new THREE.Group();
+        group.userData.isVoxelGroup = true;
         colorMap.forEach((blocks, type) => {
             const color = this.getBlockColor(type);
             const isTransp = this.isBlockTransparent(type);
@@ -501,8 +557,10 @@ class VoxelRenderer {
             mesh.receiveShadow = true;
             const m = new THREE.Matrix4();
             blocks.forEach((block, i) => {
-                const anim = this.animatingBlocks.get(`${block.x},${block.y},${block.z}`);
+                const animKey = `${block.x},${block.y},${block.z}`;
+                const anim = this.animatingBlocks.get(animKey);
                 const sy = anim || 1;
+                if (anim !== undefined) this.animatingBlocks.delete(animKey);
                 m.identity();
                 m.scale(new THREE.Vector3(1, sy, 1));
                 m.setPosition(block.x + 0.5, block.y + 0.5, block.z + 0.5);
@@ -527,7 +585,7 @@ class VoxelRenderer {
     }
 
     handleMovement() {
-        const speed = 0.5;
+        const speed = this.cameraSpeed;
         const forward = new THREE.Vector3();
         this.camera.getWorldDirection(forward);
         forward.y = 0; forward.normalize();
@@ -565,16 +623,27 @@ class VoxelRenderer {
             this.render();
         };
         loop();
-        this.wasmPollInterval = setInterval(() => {
+        this._wasmPollTimer = setInterval(() => {
             if (!this.running) return;
+            if (!this.dirty) return;
             this.updateFromWASM();
             this.rebuildMesh();
-        }, 500);
+        }, this.wasmPollInterval);
     }
 
     stop() {
         this.running = false;
-        if (this.wasmPollInterval) { clearInterval(this.wasmPollInterval); this.wasmPollInterval = null; }
+        if (this._wasmPollTimer) { clearInterval(this._wasmPollTimer); this._wasmPollTimer = null; }
+        this._launchIntervals.forEach(iv => clearInterval(iv));
+        this._launchIntervals.clear();
+    }
+
+    destroy() {
+        this.stop();
+        if (this._boundOnResize) window.removeEventListener('resize', this._boundOnResize);
+        if (this._boundOnThemeChange) window.removeEventListener('themechange', this._boundOnThemeChange);
+        if (this._boundOnKeyDown) window.removeEventListener('keydown', this._boundOnKeyDown);
+        if (this._boundOnKeyUp) window.removeEventListener('keyup', this._boundOnKeyUp);
     }
 }
 

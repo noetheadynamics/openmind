@@ -127,7 +127,9 @@
         addWaterChunk(cx, cz, waterBlocks, chunkSize) {
             const key = cx + ',' + cz;
             if (this.meshes.has(key)) {
-                this.scene.remove(this.meshes.get(key));
+                const old = this.meshes.get(key);
+                this.scene.remove(old);
+                if (old.geometry) old.geometry.dispose();
             }
 
             const positions = [];

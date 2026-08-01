@@ -1,5 +1,5 @@
 class NetworkManager {
-    constructor() {
+    constructor(options) {
         this.role = 'single'; // single, host, client
         this.roomCode = null;
         this.playerId = null;
@@ -9,13 +9,19 @@ class NetworkManager {
         this.localPeer = null;
         this.peers = new Map(); // peerId -> { connection, playerName, playerColor }
         this.dataChannels = new Map();
+        this.hostPeerId = null;
 
         this.ws = null;
         this.wsReconnectTimer = null;
         this.wsReconnectDelay = 1000;
 
-        this.signalingUrl = 'wss://signaling.openmind.dev';
+        this.signalingUrl = options?.signalingUrl || 'wss://signaling.openmind.dev';
         this.localSignaling = null;
+
+        this.stunServers = options?.stunServers || [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ];
 
         this.onPeerConnected = null;
         this.onPeerDisconnected = null;
@@ -30,9 +36,6 @@ class NetworkManager {
         this.pingInterval = null;
         this.lastPing = 0;
 
-        this.messageQueue = new Map();
-        this.sequenceNumbers = new Map();
-
         this.stats = {
             bytesSent: 0,
             bytesReceived: 0,
@@ -40,6 +43,8 @@ class NetworkManager {
             messagesReceived: 0,
             peersConnected: 0
         };
+
+        this.pingMs = 3000;
     }
 
     generatePlayerId() {
@@ -59,40 +64,55 @@ class NetworkManager {
     }
 
     async connectSignaling() {
-        try {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-
-            this.ws = new WebSocket(this.signalingUrl);
-            this.ws.binaryType = 'arraybuffer';
-
-            this.ws.onopen = () => {
-                console.log('[NET] Signaling connected');
-                this.wsReconnectDelay = 1000;
-                this.sendSignaling({ type: 'register', playerId: this.playerId });
-            };
-
-            this.ws.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-                    this.handleSignalingMessage(msg);
-                } catch (e) {
-                    console.error('[NET] Failed to parse signaling message:', e);
-                }
-            };
-
-            this.ws.onclose = () => {
-                console.log('[NET] Signaling disconnected');
-                this.scheduleReconnect();
-            };
-
-            this.ws.onerror = (err) => {
-                console.error('[NET] Signaling error:', err);
-                if (this.onError) this.onError('Signaling server unavailable. Running in offline mode.');
-            };
-        } catch (e) {
-            console.error('[NET] Failed to connect signaling:', e);
-            if (this.onError) this.onError('Could not reach signaling server');
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+        if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+            return this._waitOpen();
         }
+
+        this.ws = new WebSocket(this.signalingUrl);
+        this.ws.binaryType = 'arraybuffer';
+
+        this.ws.onopen = () => {
+            this.wsReconnectDelay = 1000;
+            this.sendSignaling({ type: 'register', playerId: this.playerId });
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                this.handleSignalingMessage(msg);
+            } catch (e) {
+                if (this.onError) this.onError('Failed to parse signaling message');
+            }
+        };
+
+        this.ws.onclose = () => {
+            this.scheduleReconnect();
+        };
+
+        this.ws.onerror = (err) => {
+            if (this.onError) this.onError('Signaling server unavailable. Running in offline mode.');
+        };
+
+        return this._waitOpen();
+    }
+
+    _waitOpen() {
+        const ws = this.ws;
+        if (!ws) return Promise.resolve();
+        if (ws.readyState === WebSocket.OPEN) return Promise.resolve();
+        if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) return Promise.resolve();
+        return new Promise((resolve) => {
+            const timer = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSED) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+            const onOpen = () => { clearInterval(timer); resolve(); };
+            ws.addEventListener('open', onOpen);
+            setTimeout(() => { clearInterval(timer); ws.removeEventListener('open', onOpen); }, 10000);
+        });
     }
 
     scheduleReconnect() {
@@ -113,7 +133,6 @@ class NetworkManager {
         switch (msg.type) {
             case 'room-created':
                 this.roomCode = msg.roomCode;
-                console.log('[NET] Room created:', msg.roomCode);
                 break;
             case 'peer-joined':
                 this.handlePeerJoin(msg);
@@ -132,10 +151,8 @@ class NetworkManager {
                 break;
             case 'room-joined':
                 this.roomCode = msg.roomCode;
-                console.log('[NET] Joined room:', msg.roomCode);
                 break;
             case 'error':
-                console.error('[NET] Signaling error:', msg.message);
                 if (this.onError) this.onError(msg.message);
                 break;
         }
@@ -143,7 +160,6 @@ class NetworkManager {
 
     async handlePeerJoin(msg) {
         const peerId = msg.peerId;
-        console.log('[NET] Peer joining:', peerId);
 
         const pc = this.createPeerConnection(peerId);
         const channel = pc.createDataChannel('world', {
@@ -168,7 +184,6 @@ class NetworkManager {
 
     async handleOffer(msg) {
         const peerId = msg.senderPeer;
-        console.log('[NET] Received offer from:', peerId);
 
         const pc = this.createPeerConnection(peerId);
         await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
@@ -208,7 +223,6 @@ class NetworkManager {
 
     handlePeerLeave(msg) {
         const peerId = msg.peerId;
-        console.log('[NET] Peer left:', peerId);
         if (this.peers.has(peerId)) {
             const peer = this.peers.get(peerId);
             peer.connection.close();
@@ -221,10 +235,7 @@ class NetworkManager {
 
     createPeerConnection(peerId) {
         const config = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
+            iceServers: this.stunServers
         };
 
         const pc = new RTCPeerConnection(config);
@@ -252,13 +263,11 @@ class NetworkManager {
 
         pc.onconnectionstatechange = () => {
             if (pc.connectionState === 'connected') {
-                console.log('[NET] Peer connected:', peerId);
                 this.stats.peersConnected = this.peers.size;
                 if (this.onPeerConnected) {
                     this.onPeerConnected(peerId, peerInfo.playerName, peerInfo.playerColor);
                 }
             } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                console.log('[NET] Peer connection lost:', peerId);
                 pc.close();
                 this.peers.delete(peerId);
                 this.dataChannels.delete(peerId);
@@ -278,7 +287,6 @@ class NetworkManager {
         channel.binaryType = 'arraybuffer';
 
         channel.onopen = () => {
-            console.log('[NET] Data channel open with:', peerId);
             this.dataChannels.set(peerId, channel);
         };
 
@@ -335,7 +343,7 @@ class NetworkManager {
                     break;
             }
         } catch (e) {
-            console.error('[NET] Failed to parse message:', e);
+            if (this.onError) this.onError('Failed to parse peer message');
         }
     }
 
@@ -409,14 +417,15 @@ class NetworkManager {
                 try {
                     channel.send(data);
                 } catch (e) {
-                    console.error('[NET] Broadcast error:', e);
+                    if (this.onError) this.onError('Broadcast failed');
                 }
             }
         });
     }
 
     sendToHost(data) {
-        const hostChannel = this.dataChannels.get('host');
+        const hostId = this.hostPeerId || (this.peers.size ? this.peers.keys().next().value : null);
+        const hostChannel = hostId ? this.dataChannels.get(hostId) : null;
         if (hostChannel && hostChannel.readyState === 'open') {
             hostChannel.send(data);
         }
@@ -430,7 +439,7 @@ class NetworkManager {
     }
 
     startPing() {
-        this.pingInterval = setInterval(() => this.sendPing(), 3000);
+        this.pingInterval = setInterval(() => this.sendPing(), this.pingMs);
     }
 
     stopPing() {

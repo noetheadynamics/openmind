@@ -32,7 +32,7 @@ class OmniConsole {
         this.buildingHistory = new BuildingHistory();
         this.loadingScreen = null;
         this.touchControls = null;
-        this._isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        this._isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
         this.activePanel = 'prompt';
         this.promptHistory = [];
         this.historyIndex = -1;
@@ -126,7 +126,7 @@ class OmniConsole {
             this.shortcuts.register('hotbar_' + i, () => {
                 if (this.renderer) {
                     this.renderer.hotbarIndex = idx;
-                    this.renderer.selectedBlockType = this.renderer.blockTypes.filter(b => b.id !== 0)[idx - 1]?.id || 1;
+                    this.renderer.setSelectedBlockType(this.renderer.blockTypes.filter(b => b.id !== 0)[idx - 1]?.id || 1);
                     this.renderer.updateHotbar();
                 }
             });
@@ -233,6 +233,10 @@ class OmniConsole {
                     console.log('[Mobile] TouchControls activated');
                 }
                 this.startSimulation();
+                if (window.openmindUpdater) {
+                    window.openmindUpdater.start();
+                    console.log('[Updater] Auto-update checks enabled');
+                }
             }
             this.updateConnectionStatus(ok);
         } catch (e) {

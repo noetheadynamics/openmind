@@ -5,7 +5,6 @@ class HostSystem {
         this.roomCode = null;
         this.worldVersion = 0;
         this.connectedClients = new Map(); // peerId -> { name, color, role, state, joinedAt }
-        this.maxPlayers = 8;
         this.isHosting = false;
 
         this.permissions = new PermissionsSystem();
@@ -53,12 +52,20 @@ class HostSystem {
         this.startTickLoop();
         this.network.startPing();
 
-        console.log('[HOST] Started hosting, room:', this.roomCode);
+        this.network.connectSignaling().then(() => {
+            this.network.sendSignaling({ type: 'create-room', roomCode: this.roomCode, playerId: this.network.playerId });
+        });
+
         return this.roomCode;
     }
 
     handleClientConnected(peerId, name, color) {
-        console.log('[HOST] Client connected:', name, '(' + peerId + ')');
+        if (this.connectedClients.size >= this.permissions.worldSettings.maxPlayers) {
+            this.network.sendToPeer(peerId, JSON.stringify({
+                type: 'kick', reason: 'Server full', sender: this.network.playerId
+            }));
+            return;
+        }
 
         const clientInfo = {
             name: name || 'Guest',
@@ -79,7 +86,6 @@ class HostSystem {
     }
 
     handleClientDisconnected(peerId, name) {
-        console.log('[HOST] Client disconnected:', name);
         this.connectedClients.delete(peerId);
         this.permissions.removePlayer(peerId);
         this.broadcastPlayerList();
@@ -101,7 +107,6 @@ class HostSystem {
         };
 
         this.network.sendToPeer(peerId, JSON.stringify(syncMsg));
-        console.log('[HOST] World sync sent to', peerId);
     }
 
     handleClientBlockUpdate(msg) {
@@ -327,7 +332,17 @@ class HostSystem {
                 }));
                 return;
             }
+            if (this.permissions.protectedAreas.length >= MAX_PROTECTED_AREAS) {
+                this.network.broadcast(JSON.stringify({
+                    type: 'chat', sender: 'system', playerName: 'System',
+                    playerColor: '#ef4444',                     message: 'Max protected areas reached'
+                }));
+                return;
+            }
             this.permissions.protectedAreas.push({ x1,y1,z1,x2,y2,z2 });
+            if (this.permissions.protectedAreas.length > MAX_PROTECTED_AREAS) {
+                this.permissions.protectedAreas = this.permissions.protectedAreas.slice(0, MAX_PROTECTED_AREAS);
+            }
             this.network.broadcast(JSON.stringify({
                 type: 'chat',
                 sender: 'system',
@@ -395,11 +410,15 @@ class HostSystem {
     startBroadcastLoop() {
         this.broadcastTimer = setInterval(() => {
             if (this.blockUpdateBuffer.length > 0) {
+                const updates = this.blockUpdateBuffer.splice(0, 50);
                 this.network.broadcast(JSON.stringify({
                     type: 'block-batch',
-                    updates: this.blockUpdateBuffer.splice(0, 50),
+                    updates,
                     version: this.worldVersion
                 }));
+            }
+            if (this.blockUpdateBuffer.length > 500) {
+                this.blockUpdateBuffer = this.blockUpdateBuffer.slice(-200);
             }
         }, this.broadcastInterval);
     }

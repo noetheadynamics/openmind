@@ -42,6 +42,7 @@ class TouchControls {
         this._playerPos = { x: 0, y: 10, z: 0 };
         this._playerYaw = 0;
         this._playerPitch = 0;
+        this._lastFrameTime = 0;
         this._animFrame = null;
         this._crosshairEl = null;
     }
@@ -118,7 +119,7 @@ class TouchControls {
 
             #tc-look-zone {
                 position:fixed; top:0; right:0; width:55%; height:100%; z-index:9997;
-                display:none; background:transparent;
+                display:none; background:transparent; pointer-events:none;
             }
 
             #tc-crosshair {
@@ -325,7 +326,7 @@ class TouchControls {
         const invBtn = this._makeActionBtn('tc-btn-inv', '◻', 'Inventory');
         invBtn.addEventListener('touchstart', (e) => {
             e.preventDefault(); this._ripple(invBtn);
-            const panel = document.getElementById('inventory-panel');
+            const panel = document.getElementById('panel-inventory');
             if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         });
 
@@ -400,11 +401,13 @@ class TouchControls {
         document.addEventListener('touchstart', this._onTouchStart, { passive: false });
         document.addEventListener('touchmove', this._onTouchMove, { passive: false });
         document.addEventListener('touchend', this._onTouchEnd, { passive: false });
+        document.addEventListener('touchcancel', this._onTouchEnd, { passive: false });
         document.addEventListener('contextmenu', this._onContextMenu);
     }
 
     _onTouchStart(e) {
         if (!this.enabled) return;
+        e.preventDefault();
         for (const touch of e.changedTouches) {
             const x = touch.clientX;
             const y = touch.clientY;
@@ -548,7 +551,7 @@ class TouchControls {
     }
 
     _placeBlock() {
-        if (this.onBlockPlace) this.onBlockPlace();
+        if (this.onBlockPlace) { this.onBlockPlace(); return; }
         if (this.renderer?.hitBlock) {
             const h = this.renderer.hitBlock;
             if (h) {
@@ -559,7 +562,7 @@ class TouchControls {
     }
 
     _breakBlock() {
-        if (this.onBlockBreak) this.onBlockBreak();
+        if (this.onBlockBreak) { this.onBlockBreak(); return; }
         if (this.renderer?.hitBlock) {
             const h = this.renderer.hitBlock;
             if (h) this.engine?.setBlock(h.x, h.y, h.z, 0);
@@ -583,15 +586,20 @@ class TouchControls {
     }
 
     _startLoop() {
-        const loop = () => { this._update(); this._animFrame = requestAnimationFrame(loop); };
+        this._lastFrameTime = performance.now();
+        const loop = (time) => {
+            const dt = Math.min((time - this._lastFrameTime) / 1000, 0.1);
+            this._lastFrameTime = time;
+            this._update(dt);
+            this._animFrame = requestAnimationFrame(loop);
+        };
         this._animFrame = requestAnimationFrame(loop);
     }
 
     _stopLoop() { if (this._animFrame) cancelAnimationFrame(this._animFrame); }
 
-    _update() {
+    _update(dt) {
         if (!this.enabled) return;
-        const dt = 0.016;
         const mx = this.joystick.x * this.moveSpeed * dt;
         const mz = this.joystick.y * this.moveSpeed * dt;
         const sin = Math.sin(this._playerYaw);
@@ -605,7 +613,7 @@ class TouchControls {
             this.velocity.y = 0;
             this.grounded = true;
         }
-        if (this.camera) this.camera.position.set(this._playerPos.x, this._playerPos.y, this._playerPos.z);
+        if (this.camera && this.joystick.active) this.camera.position.set(this._playerPos.x, this._playerPos.y, this._playerPos.z);
     }
 
     _showHints() {
@@ -626,18 +634,23 @@ class TouchControls {
         this.hintsEl = hints;
         this.hintsShown = true;
         document.getElementById('tc-hints-close').addEventListener('click', () => this._hideHints());
-        setTimeout(() => this._hideHints(), 12000);
+        this._hintsTimer = setTimeout(() => this._hideHints(), 12000);
     }
 
-    _hideHints() { if (this.hintsEl) { this.hintsEl.remove(); this.hintsEl = null; } }
+    _hideHints() {
+        if (this._hintsTimer) { clearTimeout(this._hintsTimer); this._hintsTimer = null; }
+        if (this.hintsEl) { this.hintsEl.remove(); this.hintsEl = null; }
+    }
 
     getPlayerPosition() { return { ...this._playerPos }; }
     getPlayerYaw() { return this._playerYaw; }
     getPlayerPitch() { return this._playerPitch; }
-    isTouchDevice() { return 'ontouchstart' in window || navigator.maxTouchPoints > 0; }
+    isTouchDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    }
 
     static detect() {
-        return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
     }
 
     destroy() {
@@ -645,8 +658,10 @@ class TouchControls {
         document.removeEventListener('touchstart', this._onTouchStart);
         document.removeEventListener('touchmove', this._onTouchMove);
         document.removeEventListener('touchend', this._onTouchEnd);
+        document.removeEventListener('touchcancel', this._onTouchEnd);
         document.removeEventListener('contextmenu', this._onContextMenu);
-        this._hideHints();
+        const s = document.getElementById('tc-styles');
+        if (s) s.remove();
         ['tc-joystick-zone','tc-look-zone','tc-crosshair','tc-actions','tc-hotbar'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.remove();
